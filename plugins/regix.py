@@ -34,6 +34,25 @@ TEXT = Script.TEXT
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @KingVJ01
 
+def modify_caption(message, caption, link_remove, replace_link):
+    """Return the final caption after applying settings."""
+    base_caption = custom_caption(message, caption, strip_links=False)
+    if not base_caption:
+        return None
+
+    if replace_link:
+        # Replace all URLs with the given link
+        url_pattern = re.compile(r'(https?://\S+|t\.me/\S+|@\S+)', re.IGNORECASE)
+        base_caption = url_pattern.sub(replace_link, base_caption)
+    elif link_remove:
+        base_caption = strip_urls(base_caption)
+
+    return base_caption
+
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
+
 @Client.on_callback_query(filters.regex(r'^start_public'))
 async def pub_(bot, message):
     user = message.from_user.id
@@ -105,7 +124,9 @@ async def pub_(bot, message):
     await db.add_frwd(user)
     await send(client, user, "<b>Fᴏʀᴡᴀʀᴅɪɴɢ sᴛᴀʀᴛᴇᴅ🔥</b>")
     sts.add(time=True)
-    sleep = 1 if _bot['is_bot'] else 10
+    default_delay = 1 if _bot['is_bot'] else 10
+    user_delay = datas['forward_delay']
+    sleep = user_delay if user_delay > 0 else default_delay
     await msg_edit(m, "<code>processing...</code>") 
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
@@ -114,7 +135,8 @@ async def pub_(bot, message):
         try:
           MSG = []
           pling=0
-          link_remove = Config.LINK_REMOVE_FORWD
+          link_remove = datas['link_remove']
+          replace_link = datas['replace_link']
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
           async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=sts.get("skip"), filters=filter, max_size=max_size):
                 if await is_cancelled(client, user, m, sts):
@@ -151,7 +173,11 @@ async def pub_(bot, message):
                     dup_files.append(message.document.file_id)
                     if user_have_db:
                         await user_db.add_file(message.document.file_id)
-                if forward_tag:
+                
+                # Check if we need to use batch forward or individual copy
+                use_batch = forward_tag and not (link_remove or replace_link)
+                
+                if use_batch:
                    MSG.append(message.id)
                    notcompleted = len(MSG)
                    completed = sts.get('total') - sts.get('fetched')
@@ -162,12 +188,11 @@ async def pub_(bot, message):
                       await asyncio.sleep(10)
                       MSG = []
                 else:
-                   new_caption = custom_caption(message, caption, strip_links=link_remove)
+                   new_caption = modify_caption(message, caption, link_remove, replace_link)
                    details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
                    await copy(user, client, details, m, sts)
                    sts.add('total_files')
-                   delay = sleep + (3 if link_remove else 0)
-                   await asyncio.sleep(delay) 
+                   await asyncio.sleep(sleep) 
         except Exception as e:
             await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
             print(e)
@@ -229,7 +254,7 @@ async def forward(user, bot, msg, m, sts, protect):
      await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', e.value, sts)
      await asyncio.sleep(e.value)
      await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
-     await forward(bot, msg, m, sts, protect)
+     await forward(user, bot, msg, m, sts, protect)
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -543,7 +568,7 @@ async def restart_pending_forwads(bot, user):
        try: 
           await client.get_messages(sts.get("FROM"), sts.get("limit"))
        except:
-          await msg_edit(m, f"**Source chat may be a private channel / group. Use userbot (user must be member over there) or  if Make Your [Bot](t.me/{_bot['username']}) an admin over there**", retry_btn(firwd_id), True)
+          await msg_edit(m, f"**Source chat may be a private channel / group. Use userbot (user must be member over there) or  if Make Your [Bot](t.me/{_bot['username']}) an admin over there**", retry_btn(forward_id), True)
           return await stop(client, user)
        try:
           k = await client.send_message(i.TO, "Testing")
@@ -566,7 +591,9 @@ async def restart_pending_forwads(bot, user):
     except KeyError:
         start = None
     sts.add(time=True, start_time=start)
-    sleep = 1 if _bot['is_bot'] else 10
+    default_delay = 1 if _bot['is_bot'] else 10
+    user_delay = datas['forward_delay']
+    sleep = user_delay if user_delay > 0 else default_delay
     #await msg_edit(m, "<code>processing...</code>") 
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
@@ -579,7 +606,8 @@ async def restart_pending_forwads(bot, user):
         try:
           MSG = []
           pling=0
-          link_remove = Config.LINK_REMOVE_FORWD
+          link_remove = datas['link_remove']
+          replace_link = datas['replace_link']
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
           async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=skiping, filters=filter, max_size=max_size):
                 if await is_cancelled(client, user, m, sts):
@@ -617,7 +645,10 @@ async def restart_pending_forwads(bot, user):
                     dup_files.append(message.document.file_id)
                     if user_have_db:
                         await user_db.add_file(message.document.file_id)
-                if forward_tag:
+                
+                use_batch = forward_tag and not (link_remove or replace_link)
+                
+                if use_batch:
                    MSG.append(message.id)
                    notcompleted = len(MSG)
                    completed = sts.get('total') - sts.get('fetched')
@@ -628,12 +659,11 @@ async def restart_pending_forwads(bot, user):
                       await asyncio.sleep(10)
                       MSG = []
                 else:
-                   new_caption = custom_caption(message, caption, strip_links=link_remove)
+                   new_caption = modify_caption(message, caption, link_remove, replace_link)
                    details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
                    await copy(user, client, details, m, sts)
                    sts.add('total_files')
-                   delay = sleep + (3 if link_remove else 0)
-                   await asyncio.sleep(delay) 
+                   await asyncio.sleep(sleep) 
         except Exception as e:
             await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
             if user_have_db:
