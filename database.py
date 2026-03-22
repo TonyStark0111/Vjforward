@@ -82,6 +82,7 @@ class Db:
         await self.col.update_one({'id': int(id)}, {'$set': {'configs': configs}})
 
     async def get_configs(self, id):
+        # Default configuration with all required fields
         default = {
             'caption': None,
             'duplicate': True,
@@ -108,10 +109,15 @@ class Db:
                'sticker': True
             }
         }
-        user = await self.col.find_one({'id':int(id)})
-        if user:
-            return user.get('configs', default)
-        return default 
+        
+        user = await self.col.find_one({'id': int(id)})
+        if user and 'configs' in user:
+            # Merge existing config with default to ensure all keys exist
+            config = user['configs']
+            merged = default.copy()
+            merged.update(config)
+            return merged
+        return default
 
     async def add_bot(self, datas):
        if not await self.is_bot_exist(datas['user_id']):
