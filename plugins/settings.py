@@ -461,7 +461,8 @@ async def settings_query(bot, query):
   
   # New settings handlers
   elif type == "toggle_link_remove":
-    current = (await get_configs(user_id))['link_remove']
+    config = await get_configs(user_id)
+    current = config.get('link_remove', False)
     await update_configs(user_id, 'link_remove', not current)
     await query.answer(f"Link removal {'enabled' if not current else 'disabled'}", show_alert=True)
     markup = await extra_buttons(user_id)
@@ -518,9 +519,10 @@ async def settings_query(bot, query):
 
 async def extra_buttons(user_id):
     config = await get_configs(user_id)
-    link_remove = config['link_remove']
-    forward_delay = config['forward_delay']
-    replace_link = config['replace_link']
+    # Safely get values with defaults if keys don't exist
+    link_remove = config.get('link_remove', False)
+    forward_delay = config.get('forward_delay', 0)
+    replace_link = config.get('replace_link', None)
     
     delay_text = str(forward_delay) if forward_delay > 0 else 'Default'
     replace_text = 'Set' if not replace_link else 'Change'
