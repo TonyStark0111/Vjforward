@@ -3,6 +3,7 @@
 # Ask Doubt on telegram @KingVJ01
 
 import asyncio 
+import re
 from database import Db, db
 from script import Script
 from pyrogram import Client, filters
@@ -493,19 +494,34 @@ async def settings_query(bot, query):
     await query.message.delete()
     msg = await bot.ask(
         user_id,
-        "**Send the replacement URL** (e.g., https://example.com)\n\n"
-        "Type `none` to disable replacement.\n"
+        "**Send the replacement text**\n\n"
+        "You can use:\n"
+        "• `@username` - for Telegram username\n"
+        "• `https://example.com` - for any URL\n"
+        "• `none` - to disable replacement\n\n"
+        "**Examples:**\n"
+        "`@mynewchannel`\n"
+        "`https://t.me/mynewchannel`\n"
+        "`@NewChannel`\n\n"
         "**/cancel** - cancel this process"
     )
     if msg.text == "/cancel":
         return await msg.reply("Cancelled.")
+    
     link = msg.text.strip()
+    
     if link.lower() == "none":
         link = None
-    elif link and not link.startswith(('http://', 'https://')):
-        return await msg.reply("Invalid URL. Must start with http:// or https://")
+    elif link.startswith('@'):
+        # Valid username format (at least 5 characters after @)
+        if not re.match(r'^@[a-zA-Z][a-zA-Z0-9_]{4,}$', link):
+            return await msg.reply("Invalid username format. Username must start with @ followed by at least 5 characters (letters, numbers, underscore)")
+        link = link  # Keep as is
+    elif not link.startswith(('http://', 'https://')):
+        return await msg.reply("Invalid input. Must start with http://, https://, @username, or 'none'")
+    
     await update_configs(user_id, 'replace_link', link)
-    await msg.reply("Replacement link updated.")
+    await msg.reply(f"Replacement text set to: `{link if link else 'disabled'}`")
     markup = await extra_buttons(user_id)
     await msg.reply("Extra settings:", reply_markup=markup)
 
