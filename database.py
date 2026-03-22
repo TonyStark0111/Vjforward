@@ -1,3 +1,7 @@
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
+
 import motor.motor_asyncio
 from config import Config
 
@@ -89,6 +93,9 @@ class Db:
             'protect': None,
             'button': None,
             'db_uri': None,
+            'link_remove': False,
+            'forward_delay': 0,
+            'replace_link': None,
             'filters': {
                'poll': True,
                'text': True,
