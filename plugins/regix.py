@@ -19,6 +19,7 @@ from pyrogram.errors import FloodWait, MessageNotModified
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message 
 from .db import connect_user_db
 from pyrogram.types import Message
+from .linkremoveforwd import strip_urls
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -102,7 +103,7 @@ async def pub_(bot, message):
             user_have_db = True
     temp.forwardings += 1
     await db.add_frwd(user)
-    await send(client, user, "<b>Fᴏʀᴡᴀᴅɪɴɢ sᴛᴀʀᴛᴇᴅ🔥</b>")
+    await send(client, user, "<b>Fᴏʀᴡᴀʀᴅɪɴɢ sᴛᴀʀᴛᴇᴅ🔥</b>")
     sts.add(time=True)
     sleep = 1 if _bot['is_bot'] else 10
     await msg_edit(m, "<code>processing...</code>") 
@@ -113,6 +114,7 @@ async def pub_(bot, message):
         try:
           MSG = []
           pling=0
+          link_remove = Config.LINK_REMOVE_FORWD
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
           async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=sts.get("skip"), filters=filter, max_size=max_size):
                 if await is_cancelled(client, user, m, sts):
@@ -160,11 +162,12 @@ async def pub_(bot, message):
                       await asyncio.sleep(10)
                       MSG = []
                 else:
-                   new_caption = custom_caption(message, caption)
+                   new_caption = custom_caption(message, caption, strip_links=link_remove)
                    details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
                    await copy(user, client, details, m, sts)
                    sts.add('total_files')
-                   await asyncio.sleep(sleep) 
+                   delay = sleep + (3 if link_remove else 0)
+                   await asyncio.sleep(delay) 
         except Exception as e:
             await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
             print(e)
@@ -174,7 +177,7 @@ async def pub_(bot, message):
             temp.IS_FRWD_CHAT.remove(sts.TO)
             return await stop(client, user)
         temp.IS_FRWD_CHAT.remove(sts.TO)
-        await send(client, user, "<b>🎉 ғᴏʀᴡᴀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
+        await send(client, user, "<b>🎉 ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
         await edit(user, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts) 
         if user_have_db:
             await user_db.drop_all()
@@ -279,7 +282,7 @@ async def is_cancelled(client, user, msg, sts):
       if sts.TO in temp.IS_FRWD_CHAT:
          temp.IS_FRWD_CHAT.remove(sts.TO)
       await edit(user, msg, 'ᴄᴀɴᴄᴇʟʟᴇᴅ', "cancelled", sts)
-      await send(client, user, "<b>❌ ғᴏʀᴡᴀᴅɪɴɢ ᴄᴀɴᴄᴇʟʟᴇᴅ</b>")
+      await send(client, user, "<b>❌ ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴀɴᴄᴇʟʟᴇᴅ</b>")
       await stop(client, user)
       return True 
    return False 
@@ -311,7 +314,7 @@ async def send(bot, user, text):
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @KingVJ01
 
-def custom_caption(msg, caption):
+def custom_caption(msg, caption, strip_links=False):
   if msg.media:
     if (msg.video or msg.document or msg.audio or msg.photo):
       media = getattr(msg, msg.media.value, None)
@@ -321,6 +324,8 @@ def custom_caption(msg, caption):
         fcaption = getattr(msg, 'caption', '')
         if fcaption:
           fcaption = fcaption.html
+        if strip_links:
+          fcaption = strip_urls(fcaption)
         if caption:
           return caption.format(filename=file_name, size=get_size(file_size), caption=fcaption)
         return fcaption
@@ -574,6 +579,7 @@ async def restart_pending_forwads(bot, user):
         try:
           MSG = []
           pling=0
+          link_remove = Config.LINK_REMOVE_FORWD
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
           async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=skiping, filters=filter, max_size=max_size):
                 if await is_cancelled(client, user, m, sts):
@@ -622,11 +628,12 @@ async def restart_pending_forwads(bot, user):
                       await asyncio.sleep(10)
                       MSG = []
                 else:
-                   new_caption = custom_caption(message, caption)
+                   new_caption = custom_caption(message, caption, strip_links=link_remove)
                    details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
                    await copy(user, client, details, m, sts)
                    sts.add('total_files')
-                   await asyncio.sleep(sleep) 
+                   delay = sleep + (3 if link_remove else 0)
+                   await asyncio.sleep(delay) 
         except Exception as e:
             await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
             if user_have_db:
@@ -635,7 +642,7 @@ async def restart_pending_forwads(bot, user):
             temp.IS_FRWD_CHAT.remove(sts.TO)
             return await stop(client, user)
         temp.IS_FRWD_CHAT.remove(sts.TO)
-        await send(client, user, "<b>🎉 ғᴏʀᴡᴀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
+        await send(client, user, "<b>🎉 ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
         if user_have_db:
             await user_db.drop_all()
             await user_db.close()
