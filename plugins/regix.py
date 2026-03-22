@@ -5,7 +5,8 @@
 import os
 import sys 
 import math
-import time, re
+import time
+import re
 import asyncio 
 import logging
 import random
@@ -34,16 +35,41 @@ TEXT = Script.TEXT
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @KingVJ01
 
+def clean_html_tags(text):
+    """Remove HTML tags from text while preserving content."""
+    if not text:
+        return text
+    
+    # Remove all HTML tags but keep content
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Clean up extra whitespace
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
+    
+    return text
+
 def modify_caption(message, caption, link_remove, replace_link):
     """Return the final caption after applying settings."""
     base_caption = custom_caption(message, caption, strip_links=False)
     if not base_caption:
         return None
 
+    # Clean HTML tags if we're going to modify the caption
+    if replace_link or link_remove:
+        base_caption = clean_html_tags(base_caption)
+
     if replace_link:
-        # Replace all URLs with the given link
+        # Replace all URLs and @mentions with the given replacement
         url_pattern = re.compile(r'(https?://\S+|t\.me/\S+|@\S+)', re.IGNORECASE)
-        base_caption = url_pattern.sub(replace_link, base_caption)
+        
+        # Special handling for @username replacement
+        if replace_link.startswith('@'):
+            # Replace with username format
+            base_caption = url_pattern.sub(replace_link, base_caption)
+        else:
+            # Replace with URL format
+            base_caption = url_pattern.sub(replace_link, base_caption)
     elif link_remove:
         base_caption = strip_urls(base_caption)
 
