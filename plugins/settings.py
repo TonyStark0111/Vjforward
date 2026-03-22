@@ -37,9 +37,10 @@ async def settings_query(bot, query):
        "<b>Hᴇʀᴇ Is Tʜᴇ Sᴇᴛᴛɪɴɢs Pᴀɴᴇʟ⚙\n\nᴄʜᴀɴɢᴇ ʏᴏᴜʀ sᴇᴛᴛɪɴɢs ᴀs ʏᴏᴜʀ ᴡɪsʜ 👇</b>",
        reply_markup=main_buttons())
   elif type=="extra":
+       markup = await extra_buttons(user_id)
        await query.message.edit_text(
          "<b>Hᴇʀᴇ Is Tʜᴇ Exᴛʀᴀ Sᴇᴛᴛɪɴɢs Pᴀɴᴇʟ⚙</b>",
-         reply_markup=extra_buttons())
+         reply_markup=markup)
   elif type=="bots":
      buttons = [] 
      _bot = await db.get_bot(user_id)
@@ -457,6 +458,56 @@ async def settings_query(bot, query):
                       callback_data="settings#get_keyword")])
     await query.message.edit_text(text="**successfully deleted All Keywords**",
                                    reply_markup=InlineKeyboardMarkup(buttons))
+  
+  # New settings handlers
+  elif type == "toggle_link_remove":
+    current = (await get_configs(user_id))['link_remove']
+    await update_configs(user_id, 'link_remove', not current)
+    await query.answer(f"Link removal {'enabled' if not current else 'disabled'}", show_alert=True)
+    markup = await extra_buttons(user_id)
+    await query.message.edit_reply_markup(markup)
+
+  elif type == "set_forward_delay":
+    await query.message.delete()
+    msg = await bot.ask(
+        user_id,
+        "**Send the delay in seconds between forwarded messages.**\n\n"
+        "`0` = use default (1s for bot, 10s for userbot)\n"
+        "**/cancel** - cancel this process"
+    )
+    if msg.text == "/cancel":
+        return await msg.reply("Cancelled.")
+    try:
+        delay = int(msg.text)
+        if delay < 0:
+            return await msg.reply("Delay cannot be negative.")
+    except ValueError:
+        return await msg.reply("Invalid number. Please send a valid integer.")
+    await update_configs(user_id, 'forward_delay', delay)
+    await msg.reply(f"Forward delay set to {delay} seconds.")
+    markup = await extra_buttons(user_id)
+    await msg.reply("Extra settings:", reply_markup=markup)
+
+  elif type == "set_replace_link":
+    await query.message.delete()
+    msg = await bot.ask(
+        user_id,
+        "**Send the replacement URL** (e.g., https://example.com)\n\n"
+        "Type `none` to disable replacement.\n"
+        "**/cancel** - cancel this process"
+    )
+    if msg.text == "/cancel":
+        return await msg.reply("Cancelled.")
+    link = msg.text.strip()
+    if link.lower() == "none":
+        link = None
+    elif link and not link.startswith(('http://', 'https://')):
+        return await msg.reply("Invalid URL. Must start with http:// or https://")
+    await update_configs(user_id, 'replace_link', link)
+    await msg.reply("Replacement link updated.")
+    markup = await extra_buttons(user_id)
+    await msg.reply("Extra settings:", reply_markup=markup)
+
   elif type.startswith("alert"):
     alert = type.split('_')[1]
     await query.answer(alert, show_alert=True)
@@ -465,23 +516,46 @@ async def settings_query(bot, query):
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @KingVJ01
 
-def extra_buttons():
-   buttons = [[
-       InlineKeyboardButton('💾 Mɪɴ Sɪᴢᴇ Lɪᴍɪᴛ',
+async def extra_buttons(user_id):
+    config = await get_configs(user_id)
+    link_remove = config['link_remove']
+    forward_delay = config['forward_delay']
+    replace_link = config['replace_link']
+    
+    delay_text = str(forward_delay) if forward_delay > 0 else 'Default'
+    replace_text = 'Set' if not replace_link else 'Change'
+    
+    buttons = [[
+        InlineKeyboardButton('💾 Mɪɴ Sɪᴢᴇ Lɪᴍɪᴛ',
                     callback_data=f'settings#file_size')
-       ],[
-       InlineKeyboardButton('💾 Mᴀx Sɪᴢᴇ Lɪᴍɪᴛ',
-                    callback_data=f'settings#maxfile_size ')
-       ],[
-       InlineKeyboardButton('🚥 Keywords',
+        ],[
+        InlineKeyboardButton('💾 Mᴀx Sɪᴢᴇ Lɪᴍɪᴛ',
+                    callback_data=f'settings#maxfile_size')
+        ],[
+        InlineKeyboardButton('🚥 Keywords',
                     callback_data=f'settings#get_keyword'),
-       InlineKeyboardButton('🕹 Extensions',
+        InlineKeyboardButton('🕹 Extensions',
                     callback_data=f'settings#get_extension')
-       ],[
-       InlineKeyboardButton('⫷ Bᴀᴄᴋ',
+        ],[
+        InlineKeyboardButton('🔗 Link Removal',
+                    callback_data=f'settings#link_remove'),
+        InlineKeyboardButton('✅' if link_remove else '❌',
+                    callback_data=f'settings#toggle_link_remove')
+        ],[
+        InlineKeyboardButton('⏱ Forward Delay',
+                    callback_data=f'settings#forward_delay'),
+        InlineKeyboardButton(delay_text,
+                    callback_data=f'settings#set_forward_delay')
+        ],[
+        InlineKeyboardButton('🔄 Replacement Link',
+                    callback_data=f'settings#replace_link'),
+        InlineKeyboardButton(replace_text,
+                    callback_data=f'settings#set_replace_link')
+        ],[
+        InlineKeyboardButton('⫷ Bᴀᴄᴋ',
                     callback_data=f'settings#main')
-       ]]
-   return InlineKeyboardMarkup(buttons)
+        ]]
+    return InlineKeyboardMarkup(buttons)
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
