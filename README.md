@@ -11,8 +11,17 @@
 - [x] Skip Duplicate Messages
 - [x] Skip Messages Based On Extensions & Keywords & Size
 - [x] Filter Type Of Messages
-- [x] Auto Restart Pending Task After Bot Restart 
-
+- [x] Auto Restart Pending Task After Bot Restart
+- [x] Link Removal - Removes all URLs and mentions from captions
+- [x] Forward Delay - Custom delay between forwarded messages (0 = default based on bot type)
+- [x] Replacement Link - Replaces all URLs/mentions with:
+   · Telegram username (e.g., @mynewchannel)
+   · Custom URL (e.g., https://example.com)
+- [x] HTML Tag Cleaning - Removes anchor tags like <a href="...">...</a> automatically
+- [x] Per-User Settings - All settings are stored per user in the database
+https://example.com Auto Migration - Existing users automatically get default values for new settings
+- [x] Batch Forward Optimization - Automatically switches to individual copying when link modifications are enabled
+      
 ## Commands
 
 ```
