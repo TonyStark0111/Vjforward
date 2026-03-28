@@ -59,42 +59,90 @@ async def extension_filter(extensions, file_name):
     return bool(re.search(extensions, file_name, re.IGNORECASE))
 
 
-# ============ FUNCTION TO GET CONTENT FOR KEYWORD CHECK ============
+# ============ FUNCTION TO GET ALL CONTENT FOR KEYWORD CHECK ============
 def get_keyword_content(message):
     """
-    Extract appropriate content from message for keyword checking.
-    Supports video, document, and photo messages.
+    Extract ALL content from message for keyword checking.
+    Checks both file name AND caption for all media types.
+    Supports: Documents, Videos, Photos, Text, Audio, Animations, Voice, etc.
     """
-    # For documents (files) - check file name
-    if message.document and message.document.file_name:
-        return message.document.file_name
+    content_list = []
     
-    # For videos - check file name if available
-    elif message.video and message.video.file_name:
-        return message.video.file_name
+    # For Documents (files) - check file name AND caption
+    if message.document:
+        if message.document.file_name:
+            content_list.append(message.document.file_name)
+        if message.caption:
+            content_list.append(message.caption)
     
-    # For videos without file name - check caption
-    elif message.video and message.caption:
-        return message.caption
+    # For Videos - check file name AND caption
+    elif message.video:
+        if message.video.file_name:
+            content_list.append(message.video.file_name)
+        if message.caption:
+            content_list.append(message.caption)
     
-    # For photos - check caption
-    elif message.photo and message.caption:
-        return message.caption
+    # For Photos - check caption
+    elif message.photo:
+        if message.caption:
+            content_list.append(message.caption)
     
-    # For text messages - check text content
+    # For Text Messages - check text content
     elif message.text:
-        return message.text
+        content_list.append(message.text)
     
-    # For audio files
-    elif message.audio and message.audio.file_name:
-        return message.audio.file_name
+    # For Audio files - check file name AND caption
+    elif message.audio:
+        if message.audio.file_name:
+            content_list.append(message.audio.file_name)
+        if message.caption:
+            content_list.append(message.caption)
     
-    # For animations (GIFs)
-    elif message.animation and message.animation.file_name:
-        return message.animation.file_name
+    # For Animations (GIFs) - check file name AND caption
+    elif message.animation:
+        if message.animation.file_name:
+            content_list.append(message.animation.file_name)
+        if message.caption:
+            content_list.append(message.caption)
     
-    # Default - return None if no content to check
+    # For Voice messages - check caption (if any)
+    elif message.voice:
+        if message.caption:
+            content_list.append(message.caption)
+    
+    # For Stickers - check sticker emoji or caption
+    elif message.sticker:
+        if message.sticker.emoji:
+            content_list.append(message.sticker.emoji)
+        if message.caption:
+            content_list.append(message.caption)
+    
+    # Combine all content into one string (or return list for multiple checks)
+    if content_list:
+        return " ".join(content_list)  # Combine all content for checking
+    
     return None
+
+
+# ============ CHECK IF ANY KEYWORD MATCHES IN ANY CONTENT ============
+async def should_filter_by_keywords(keywords, message):
+    """
+    Check if message should be filtered based on keywords.
+    Returns True if should filter out (skip), False if should keep.
+    """
+    if keywords is None:
+        return False
+    
+    # Get all content from message
+    all_content = get_keyword_content(message)
+    
+    if not all_content:
+        # No content to check - filter out if keywords are set
+        return True if keywords else False
+    
+    # Check if any keyword matches in any content
+    # Return True (filter out) if NO keyword found
+    return not bool(re.search(keywords, all_content, re.IGNORECASE))
 
 
 # Don't Remove Credit Tg - @VJ_Botz
@@ -250,11 +298,8 @@ async def pub_(bot, message):
                    sts.add('deleted')
                    continue
                 
-                # ============ GET CONTENT FOR KEYWORD CHECK ============
-                keyword_content = get_keyword_content(message)
-                
-                # ============ APPLY KEYWORD FILTER (For all message types) ============
-                if keyword_content and await keyword_filter(keywords, keyword_content):
+                # ============ APPLY KEYWORD FILTER (Checks file name AND caption for all media types) ============
+                if await should_filter_by_keywords(keywords, message):
                     sts.add('filtered')
                     continue
                 
@@ -276,6 +321,10 @@ async def pub_(bot, message):
                     file_id_to_check = message.video.file_id
                 elif message.photo:
                     file_id_to_check = message.photo.file_id
+                elif message.audio:
+                    file_id_to_check = message.audio.file_id
+                elif message.animation:
+                    file_id_to_check = message.animation.file_id
                 
                 if file_id_to_check and file_id_to_check in dup_files:
                     sts.add('duplicate')
@@ -719,11 +768,8 @@ async def restart_pending_forwads(bot, user):
                    sts.add('deleted')
                    continue
                 
-                # ============ GET CONTENT FOR KEYWORD CHECK ============
-                keyword_content = get_keyword_content(message)
-                
-                # ============ APPLY KEYWORD FILTER (For all message types) ============
-                if keyword_content and await keyword_filter(keywords, keyword_content):
+                # ============ APPLY KEYWORD FILTER (Checks file name AND caption for all media types) ============
+                if await should_filter_by_keywords(keywords, message):
                     sts.add('filtered')
                     continue
                 
@@ -745,6 +791,10 @@ async def restart_pending_forwads(bot, user):
                     file_id_to_check = message.video.file_id
                 elif message.photo:
                     file_id_to_check = message.photo.file_id
+                elif message.audio:
+                    file_id_to_check = message.audio.file_id
+                elif message.animation:
+                    file_id_to_check = message.animation.file_id
                 
                 if file_id_to_check and file_id_to_check in dup_files:
                     sts.add('duplicate')
