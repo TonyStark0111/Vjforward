@@ -31,35 +31,72 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 TEXT = Script.TEXT
 
-# ============ FIXED KEYWORD FILTER FUNCTION ============
+
+# ============ EXACT KEYWORD MATCHING FUNCTIONS ============
+
 async def keyword_filter(keywords, content):
     """
     Returns True if the content should be filtered out (skipped).
     Returns False if the content should be kept.
+    Uses exact word matching (whole word only).
+    
+    Examples:
+    - Keyword "Sexart" matches "Sexart" but NOT "sex"
+    - Keyword "sex" matches "sex" but NOT "sexy" or "sexart"
     """
     if keywords is None:
-        return False  # No keywords → keep everything
-    if not content:
-        return True   # No content to check → filter out
-    # Return True to skip if keywords NOT found
-    return not bool(re.search(keywords, content, re.IGNORECASE))
-
-
-# ============ FIXED EXTENSION FILTER FUNCTION ============
-async def extension_filter(extensions, file_name):
-    """
-    Returns True if the file should be filtered out (skipped).
-    Returns False if the file should be kept.
-    """
-    if extensions is None:
-        return False  # No extension filter → keep everything
-    if not file_name:
         return False
-    # Return True to skip if extension IS found
-    return bool(re.search(extensions, file_name, re.IGNORECASE))
+    if not content:
+        return True
+    
+    # Split keywords by | and create exact word patterns
+    keyword_list = keywords.split('|')
+    
+    # Create pattern for exact word matching with word boundaries
+    exact_patterns = []
+    for kw in keyword_list:
+        # Skip empty keywords
+        if not kw:
+            continue
+        # Escape special regex characters and add word boundaries
+        escaped_kw = re.escape(kw)
+        exact_patterns.append(r'\b' + escaped_kw + r'\b')
+    
+    # If no valid keywords, keep everything
+    if not exact_patterns:
+        return False
+    
+    # Combine all patterns
+    exact_pattern = '|'.join(exact_patterns)
+    
+    # Check if ANY exact keyword matches
+    if re.search(exact_pattern, content, re.IGNORECASE):
+        return False  # Exact keyword found → KEEP
+    else:
+        return True   # No exact keyword found → FILTER OUT
+
+
+async def should_filter_by_keywords(keywords, message):
+    """
+    Check if message should be filtered based on exact keywords.
+    Returns True if should filter out (skip), False if should keep.
+    """
+    if keywords is None:
+        return False
+    
+    # Get all content from message
+    all_content = get_keyword_content(message)
+    
+    if not all_content:
+        # No content to check - filter out if keywords are set
+        return True if keywords else False
+    
+    # Use exact keyword matching
+    return await keyword_filter(keywords, all_content)
 
 
 # ============ FUNCTION TO GET ALL CONTENT FOR KEYWORD CHECK ============
+
 def get_keyword_content(message):
     """
     Extract ALL content from message for keyword checking.
@@ -117,32 +154,26 @@ def get_keyword_content(message):
         if message.caption:
             content_list.append(message.caption)
     
-    # Combine all content into one string (or return list for multiple checks)
+    # Combine all content into one string
     if content_list:
-        return " ".join(content_list)  # Combine all content for checking
+        return " ".join(content_list)
     
     return None
 
 
-# ============ CHECK IF ANY KEYWORD MATCHES IN ANY CONTENT ============
-async def should_filter_by_keywords(keywords, message):
+# ============ FIXED EXTENSION FILTER FUNCTION ============
+
+async def extension_filter(extensions, file_name):
     """
-    Check if message should be filtered based on keywords.
-    Returns True if should filter out (skip), False if should keep.
+    Returns True if the file should be filtered out (skipped).
+    Returns False if the file should be kept.
     """
-    if keywords is None:
+    if extensions is None:
+        return False  # No extension filter → keep everything
+    if not file_name:
         return False
-    
-    # Get all content from message
-    all_content = get_keyword_content(message)
-    
-    if not all_content:
-        # No content to check - filter out if keywords are set
-        return True if keywords else False
-    
-    # Check if any keyword matches in any content
-    # Return True (filter out) if NO keyword found
-    return not bool(re.search(keywords, all_content, re.IGNORECASE))
+    # Return True to skip if extension IS found
+    return bool(re.search(extensions, file_name, re.IGNORECASE))
 
 
 # Don't Remove Credit Tg - @VJ_Botz
@@ -298,7 +329,7 @@ async def pub_(bot, message):
                    sts.add('deleted')
                    continue
                 
-                # ============ APPLY KEYWORD FILTER (Checks file name AND caption for all media types) ============
+                # ============ APPLY EXACT KEYWORD FILTER (Checks file name AND caption for all media types) ============
                 if await should_filter_by_keywords(keywords, message):
                     sts.add('filtered')
                     continue
@@ -768,7 +799,7 @@ async def restart_pending_forwads(bot, user):
                    sts.add('deleted')
                    continue
                 
-                # ============ APPLY KEYWORD FILTER (Checks file name AND caption for all media types) ============
+                # ============ APPLY EXACT KEYWORD FILTER (Checks file name AND caption for all media types) ============
                 if await should_filter_by_keywords(keywords, message):
                     sts.add('filtered')
                     continue
