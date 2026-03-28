@@ -36,8 +36,9 @@ resetall - reset all users settings (owner only)
 broadcast - broadcast a message to all your users (owner only)
 ```
 
-## Variables
-
+<details><summary><b> - ᴠᴀʀɪᴀʙʟᴇs :</b></summary>
+  
+## ᴠᴀʀɪᴀʙʟᴇs
 * `API_ID` API Id from my.telegram.org
 * `API_HASH` API Hash from my.telegram.org
 * `BOT_TOKEN` Bot token from @BotFather
