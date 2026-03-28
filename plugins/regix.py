@@ -75,9 +75,14 @@ def modify_caption(message, caption, link_remove, replace_link):
 
     return base_caption
 
-# Helper to get media info from any message (including photos)
+# Helper to get media info from any message (fixed for photos)
 def get_media_info(message):
     """Extract media object, file_name, file_size, and file_id from a message if present."""
+    media = None
+    file_name = None
+    file_size = None
+    file_id = None
+    
     if message.document:
         media = message.document
     elif message.video:
@@ -87,13 +92,19 @@ def get_media_info(message):
     elif message.animation:
         media = message.animation
     elif message.photo:
-        media = message.photo[-1] if message.photo else None  # get the largest photo
+        # Photo is a list, get the largest one (last element)
+        if message.photo:
+            media = message.photo[-1] if isinstance(message.photo, list) else message.photo
+    elif message.sticker:
+        media = message.sticker
     else:
         return None, None, None, None
     
-    file_name = getattr(media, 'file_name', None)
-    file_size = getattr(media, 'file_size', None)
-    file_id = getattr(media, 'file_id', None)
+    if media:
+        file_name = getattr(media, 'file_name', None)
+        file_size = getattr(media, 'file_size', None)
+        file_id = getattr(media, 'file_id', None)
+    
     return media, file_name, file_size, file_id
 
 # Don't Remove Credit Tg - @VJ_Botz
@@ -207,7 +218,7 @@ async def pub_(bot, message):
                 
                 # Extract media info
                 media, file_name, file_size, file_id = get_media_info(message)
-                # Get caption (original) – for text messages it's the text
+                # Get caption (original) - for text messages it's the text
                 caption_text = message.caption or message.text
                 
                 # Apply extension filter (only if media has a file_name)
