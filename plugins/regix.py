@@ -63,27 +63,34 @@ def get_media_info(message):
     file_size = None
     file_id = None
 
-    if message.document:
-        media = message.document
-    elif message.video:
-        media = message.video
-    elif message.audio:
-        media = message.audio
-    elif message.animation:
-        media = message.animation
-    elif message.photo:
-        # photo is a list, take the last (largest) element
-        if message.photo:
-            media = message.photo[-1] if isinstance(message.photo, list) else message.photo
-    elif message.sticker:
-        media = message.sticker
-    else:
+    try:
+        if message.document:
+            media = message.document
+        elif message.video:
+            media = message.video
+        elif message.audio:
+            media = message.audio
+        elif message.animation:
+            media = message.animation
+        elif message.photo:
+            # photo is a list of Photo objects, take the last (largest) one
+            if message.photo:
+                # Access the last photo in the list
+                media = message.photo[-1] if hasattr(message.photo, '__getitem__') and len(message.photo) > 0 else None
+        elif message.sticker:
+            media = message.sticker
+    except Exception as e:
+        print(f"Error getting media info: {e}")
         return None, None, None, None
 
     if media:
-        file_name = getattr(media, 'file_name', None)
-        file_size = getattr(media, 'file_size', None)
-        file_id = getattr(media, 'file_id', None)
+        try:
+            file_name = getattr(media, 'file_name', None)
+            file_size = getattr(media, 'file_size', None)
+            file_id = getattr(media, 'file_id', None)
+        except Exception as e:
+            print(f"Error getting media attributes: {e}")
+            return None, None, None, None
 
     return media, file_name, file_size, file_id
 
@@ -123,9 +130,13 @@ def should_forward(message, file_name, original_caption, custom_caption,
     for text, kw_string in checks:
         if not kw_string:
             continue
-        # kw_string is a pipe‑separated list like "word1|word2|word3"
-        if re.search(kw_string, text, re.IGNORECASE):
-            return True
+        try:
+            # kw_string is a pipe‑separated list like "word1|word2|word3"
+            if re.search(kw_string, text, re.IGNORECASE):
+                return True
+        except Exception as e:
+            print(f"Error in keyword search: {e}")
+            continue
 
     # If none of the checks matched, filter out
     return False
@@ -238,15 +249,15 @@ async def pub_(bot, message):
                 # Custom caption (the one the user wants to add)
                 custom_caption_text = custom_caption(message, caption, strip_links=False)
 
-                # Apply extension filter
+                # Apply extension filter (only for files with names)
                 if extensions and file_name and await extension_filter(extensions, file_name):
                     sts.add('filtered')
                     continue
-                # Apply size filter
+                # Apply size filter (only for files with size)
                 if (max_size or min_size) and file_size and await size_filter(max_size, min_size, file_size):
                     sts.add('filtered')
                     continue
-                # Apply duplicate filter
+                # Apply duplicate filter (only for files with ID)
                 if datas['skip_duplicate'] and file_id and file_id in dup_files:
                     sts.add('duplicate')
                     continue
@@ -413,32 +424,38 @@ async def send(bot, user, text):
 # --------------------------------------------------------------
 
 def custom_caption(msg, caption, strip_links=False):
-  if msg.media:
-    if (msg.video or msg.document or msg.audio or msg.photo):
-      media = getattr(msg, msg.media.value, None)
-      if media:
-        file_name = getattr(media, 'file_name', '')
-        file_size = getattr(media, 'file_size', '')
-        fcaption = getattr(msg, 'caption', '')
-        if fcaption:
-          fcaption = fcaption.html
-        if strip_links:
-          fcaption = strip_urls(fcaption)
-        if caption:
-          return caption.format(filename=file_name, size=get_size(file_size), caption=fcaption)
-        return fcaption
+  try:
+    if msg.media:
+        if (msg.video or msg.document or msg.audio or msg.photo):
+            media = getattr(msg, msg.media.value, None)
+            if media:
+                file_name = getattr(media, 'file_name', '')
+                file_size = getattr(media, 'file_size', '')
+                fcaption = getattr(msg, 'caption', '')
+                if fcaption:
+                    fcaption = fcaption.html
+                if strip_links:
+                    fcaption = strip_urls(fcaption)
+                if caption:
+                    return caption.format(filename=file_name, size=get_size(file_size), caption=fcaption)
+                return fcaption
+  except Exception as e:
+      print(f"Error in custom_caption: {e}")
   return None
 
 # --------------------------------------------------------------
 
 def get_size(size):
-  units = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB"]
-  size = float(size)
-  i = 0
-  while size >= 1024.0 and i < len(units):
-     i += 1
-     size /= 1024.0
-  return "%.2f %s" % (size, units[i]) 
+  try:
+    units = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB"]
+    size = float(size)
+    i = 0
+    while size >= 1024.0 and i < len(units):
+        i += 1
+        size /= 1024.0
+    return "%.2f %s" % (size, units[i])
+  except:
+      return "0 Bytes"
 
 # --------------------------------------------------------------
 
@@ -463,25 +480,31 @@ async def extension_filter(extensions, file_name):
 # --------------------------------------------------------------
 
 async def size_filter(max_size, min_size, file_size):
-    file_size = file_size / 1024 / 1024
-    if max_size and min_size == 0:
-        return False
-    if max_size == 0:
-        return file_size < min_size
-    if min_size == 0:
-        return file_size > max_size
-    if not min_size <= file_size <= max_size:
-        return True
-    else:
+    try:
+        file_size = file_size / 1024 / 1024
+        if max_size and min_size == 0:
+            return False
+        if max_size == 0:
+            return file_size < min_size
+        if min_size == 0:
+            return file_size > max_size
+        if not min_size <= file_size <= max_size:
+            return True
+        else:
+            return False
+    except:
         return False
 
 # --------------------------------------------------------------
 
 def media(msg):
-  if msg.media:
-     media = getattr(msg, msg.media.value, None)
-     if media:
-        return getattr(media, 'file_id', None)
+  try:
+    if msg.media:
+        media = getattr(msg, msg.media.value, None)
+        if media:
+            return getattr(media, 'file_id', None)
+  except:
+      pass
   return None 
 
 # --------------------------------------------------------------
