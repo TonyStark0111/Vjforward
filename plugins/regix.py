@@ -22,126 +22,128 @@ from .db import connect_user_db
 from pyrogram.types import Message
 from .linkremoveforwd import strip_urls
 
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
+
 CLIENT = CLIENT()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 TEXT = Script.TEXT
 
-# --------------------------------------------------------------
+# ============ FIXED KEYWORD FILTER FUNCTION ============
+async def keyword_filter(keywords, content):
+    """
+    Returns True if the content should be filtered out (skipped).
+    Returns False if the content should be kept.
+    """
+    if keywords is None:
+        return False  # No keywords → keep everything
+    if not content:
+        return True   # No content to check → filter out
+    # Return True to skip if keywords NOT found
+    return not bool(re.search(keywords, content, re.IGNORECASE))
+
+
+# ============ FIXED EXTENSION FILTER FUNCTION ============
+async def extension_filter(extensions, file_name):
+    """
+    Returns True if the file should be filtered out (skipped).
+    Returns False if the file should be kept.
+    """
+    if extensions is None:
+        return False  # No extension filter → keep everything
+    if not file_name:
+        return False
+    # Return True to skip if extension IS found
+    return bool(re.search(extensions, file_name, re.IGNORECASE))
+
+
+# ============ FUNCTION TO GET CONTENT FOR KEYWORD CHECK ============
+def get_keyword_content(message):
+    """
+    Extract appropriate content from message for keyword checking.
+    Supports video, document, and photo messages.
+    """
+    # For documents (files) - check file name
+    if message.document and message.document.file_name:
+        return message.document.file_name
+    
+    # For videos - check file name if available
+    elif message.video and message.video.file_name:
+        return message.video.file_name
+    
+    # For videos without file name - check caption
+    elif message.video and message.caption:
+        return message.caption
+    
+    # For photos - check caption
+    elif message.photo and message.caption:
+        return message.caption
+    
+    # For text messages - check text content
+    elif message.text:
+        return message.text
+    
+    # For audio files
+    elif message.audio and message.audio.file_name:
+        return message.audio.file_name
+    
+    # For animations (GIFs)
+    elif message.animation and message.animation.file_name:
+        return message.animation.file_name
+    
+    # Default - return None if no content to check
+    return None
+
+
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 def clean_html_tags(text):
+    """Remove HTML tags from text while preserving content."""
     if not text:
         return text
+    
+    # Remove all HTML tags but keep content
     text = re.sub(r'<[^>]+>', '', text)
+    
+    # Clean up extra whitespace
     text = re.sub(r'\s+', ' ', text)
     text = text.strip()
+    
     return text
 
 def modify_caption(message, caption, link_remove, replace_link):
+    """Return the final caption after applying settings."""
     base_caption = custom_caption(message, caption, strip_links=False)
     if not base_caption:
         return None
+
+    # Clean HTML tags if we're going to modify the caption
     if replace_link or link_remove:
         base_caption = clean_html_tags(base_caption)
+
     if replace_link:
+        # Replace all URLs and @mentions with the given replacement
         url_pattern = re.compile(r'(https?://\S+|t\.me/\S+|@\S+)', re.IGNORECASE)
+        
+        # Special handling for @username replacement
         if replace_link.startswith('@'):
+            # Replace with username format
             base_caption = url_pattern.sub(replace_link, base_caption)
         else:
+            # Replace with URL format
             base_caption = url_pattern.sub(replace_link, base_caption)
     elif link_remove:
         base_caption = strip_urls(base_caption)
+
     return base_caption
 
-def get_media_info(message):
-    """
-    Safely extracts media object, file name, file size, and file ID.
-    Returns (media, file_name, file_size, file_id)
-    """
-    media = None
-    file_name = None
-    file_size = None
-    file_id = None
-
-    try:
-        if message.document:
-            media = message.document
-        elif message.video:
-            media = message.video
-        elif message.audio:
-            media = message.audio
-        elif message.animation:
-            media = message.animation
-        elif message.photo:
-            # photo is a list of Photo objects, take the last (largest) one
-            if message.photo:
-                # Access the last photo in the list
-                media = message.photo[-1] if hasattr(message.photo, '__getitem__') and len(message.photo) > 0 else None
-        elif message.sticker:
-            media = message.sticker
-    except Exception as e:
-        print(f"Error getting media info: {e}")
-        return None, None, None, None
-
-    if media:
-        try:
-            file_name = getattr(media, 'file_name', None)
-            file_size = getattr(media, 'file_size', None)
-            file_id = getattr(media, 'file_id', None)
-        except Exception as e:
-            print(f"Error getting media attributes: {e}")
-            return None, None, None, None
-
-    return media, file_name, file_size, file_id
-
-def should_forward(message, file_name, original_caption, custom_caption,
-                   filename_keywords, caption_keywords, custom_caption_keywords,
-                   legacy_keywords):
-    """
-    Returns True if the message should be forwarded based on keyword filters.
-    Each keyword set is independent: if any set matches, the message passes.
-    If a keyword set is empty/None, it is ignored.
-    The legacy_keywords (old global keywords) are used as a fallback if none of
-    the new sets are provided.
-    """
-    # Build a list of text pieces to check, each with its own keyword set
-    checks = []
-    if filename_keywords and file_name:
-        checks.append((file_name, filename_keywords))
-    if caption_keywords and original_caption:
-        checks.append((original_caption, caption_keywords))
-    if custom_caption_keywords and custom_caption:
-        checks.append((custom_caption, custom_caption_keywords))
-    # Legacy fallback: if no new sets are defined, use legacy_keywords on all texts
-    if not (filename_keywords or caption_keywords or custom_caption_keywords) and legacy_keywords:
-        all_text = ""
-        if file_name:
-            all_text += file_name + " "
-        if original_caption:
-            all_text += original_caption
-        if all_text:
-            checks.append((all_text, legacy_keywords))
-
-    # If no keyword sets at all, allow the message (no filtering)
-    if not checks:
-        return True
-
-    # For each check, see if the text contains any of the keywords (case-insensitive)
-    for text, kw_string in checks:
-        if not kw_string:
-            continue
-        try:
-            # kw_string is a pipe‑separated list like "word1|word2|word3"
-            if re.search(kw_string, text, re.IGNORECASE):
-                return True
-        except Exception as e:
-            print(f"Error in keyword search: {e}")
-            continue
-
-    # If none of the checks matched, filter out
-    return False
-
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 @Client.on_callback_query(filters.regex(r'^start_public'))
 async def pub_(bot, message):
@@ -149,50 +151,59 @@ async def pub_(bot, message):
     temp.CANCEL[user] = False
     frwd_id = message.data.split("_")[2]
     if temp.lock.get(user) and str(temp.lock.get(user))=="True":
-        return await message.answer("please wait until previous task complete", show_alert=True)
+      return await message.answer("please wait until previous task complete", show_alert=True)
     sts = STS(frwd_id)
     if not sts.verify():
-        await message.answer("your are clicking on my old button", show_alert=True)
-        return await message.message.delete()
+      await message.answer("your are clicking on my old button", show_alert=True)
+      return await message.message.delete()
     i = sts.get(full=True)
     if i.TO in temp.IS_FRWD_CHAT:
-        return await message.answer("In Target chat a task is progressing. please wait until task complete", show_alert=True)
+      return await message.answer("In Target chat a task is progressing. please wait until task complete", show_alert=True)
     m = await msg_edit(message.message, "<code>verifying your data's, please wait.</code>")
     _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
     filter = datas['filters']
     max_size = datas['max_size']
     min_size = datas['min_size']
-    extensions = datas['extensions']      # pipe‑separated list
-    filename_keywords = datas.get('filename_keywords')
-    caption_keywords = datas.get('caption_keywords')
-    custom_caption_keywords = datas.get('custom_caption_keywords')
-    legacy_keywords = datas.get('keywords')   # old global keywords
-
+    keyword = datas['keywords']
+    exten = datas['extensions']
+    keywords = ""
+    extensions = ""
+    if keyword:
+        for key in keyword:
+            keywords += f"{key}|"
+        keywords  = keywords.rstrip("|")
+    else:
+        keywords = None
+    if exten:
+        for ext in exten:
+            extensions += f"{ext}|"
+        extensions = extensions.rstrip("|")
+    else:
+        extensions = None
     if not _bot:
-        return await msg_edit(m, "<code>You didn't added any bot. Please add a bot using /settings !</code>", wait=True)
-    if _bot['is_bot']:
+      return await msg_edit(m, "<code>You didn't added any bot. Please add a bot using /settings !</code>", wait=True)
+    if _bot['is_bot'] == True:
         data = _bot['token']
     else:
         data = _bot['session']
     try:
-        il = True if _bot['is_bot'] else False
-        client = await get_client(data, is_bot=il)
-        await client.start()
-    except Exception as e:
-        return await m.edit(e)
+      il = True if _bot['is_bot'] == True else False
+      client = await get_client(data, is_bot=il)
+      await client.start()
+    except Exception as e:  
+      return await m.edit(e)
     await msg_edit(m, "<code>processing..</code>")
-    try:
-        await client.get_messages(sts.get("FROM"), sts.get("limit"))
+    try: 
+       await client.get_messages(sts.get("FROM"), sts.get("limit"))
     except:
-        await msg_edit(m, f"**Source chat may be a private channel / group. Use userbot (user must be member over there) or  if Make Your [Bot](t.me/{_bot['username']}) an admin over there**", retry_btn(frwd_id), True)
-        return await stop(client, user)
+       await msg_edit(m, f"**Source chat may be a private channel / group. Use userbot (user must be member over there) or  if Make Your [Bot](t.me/{_bot['username']}) an admin over there**", retry_btn(frwd_id), True)
+       return await stop(client, user)
     try:
-        k = await client.send_message(i.TO, "Testing")
-        await k.delete()
+       k = await client.send_message(i.TO, "Testing")
+       await k.delete()
     except:
-        await msg_edit(m, f"**Please Make Your [UserBot / Bot](t.me/{_bot['username']}) Admin In Target Channel With Full Permissions**", retry_btn(frwd_id), True)
-        return await stop(client, user)
-
+       await msg_edit(m, f"**Please Make Your [UserBot / Bot](t.me/{_bot['username']}) Admin In Target Channel With Full Permissions**", retry_btn(frwd_id), True)
+       return await stop(client, user)
     user_have_db = False
     dburi = datas['db_uri']
     if dburi is not None:
@@ -201,7 +212,6 @@ async def pub_(bot, message):
             await msg_edit(m, "<code>Cannot Connected Your db Errors Found Dup files Have Been Skipped after Restart</code>")
         else:
             user_have_db = True
-
     temp.forwardings += 1
     await db.add_frwd(user)
     await send(client, user, "<b>Fᴏʀᴡᴀʀᴅɪɴɢ sᴛᴀʀᴛᴇᴅ🔥</b>")
@@ -209,89 +219,93 @@ async def pub_(bot, message):
     default_delay = 1 if _bot['is_bot'] else 10
     user_delay = datas['forward_delay']
     sleep = user_delay if user_delay > 0 else default_delay
-    await msg_edit(m, "<code>processing...</code>")
+    await msg_edit(m, "<code>processing...</code>") 
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
     dup_files = []
-
     if locked:
         try:
-            MSG = []
-            pling = 0
-            link_remove = datas['link_remove']
-            replace_link = datas['replace_link']
-            await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
-            async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=sts.get("skip"), filters=filter, max_size=max_size):
+          MSG = []
+          pling=0
+          link_remove = datas['link_remove']
+          replace_link = datas['replace_link']
+          await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+          async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=sts.get("skip"), filters=filter, max_size=max_size):
                 if await is_cancelled(client, user, m, sts):
-                    if user_have_db:
-                        await user_db.drop_all()
-                        await user_db.close()
-                    return
-                if pling % 20 == 0:
-                    await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+                   if user_have_db:
+                      await user_db.drop_all()
+                      await user_db.close()
+                   return
+                if pling %20 == 0: 
+                   await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
                 pling += 1
                 sts.add('fetched')
-
                 if message == "DUPLICATE":
-                    sts.add('duplicate')
-                    continue
+                   sts.add('duplicate')
+                   continue
                 elif message == "FILTERED":
-                    sts.add('filtered')
-                    continue
+                   sts.add('filtered')
+                   continue 
                 elif message.empty or message.service:
-                    sts.add('deleted')
-                    continue
-
-                # Get media info
-                media, file_name, file_size, file_id = get_media_info(message)
-                # Original caption (if any)
-                original_caption = message.caption or message.text
-                # Custom caption (the one the user wants to add)
-                custom_caption_text = custom_caption(message, caption, strip_links=False)
-
-                # Apply extension filter (only for files with names)
-                if extensions and file_name and await extension_filter(extensions, file_name):
+                   sts.add('deleted')
+                   continue
+                
+                # ============ GET CONTENT FOR KEYWORD CHECK ============
+                keyword_content = get_keyword_content(message)
+                
+                # ============ APPLY KEYWORD FILTER (For all message types) ============
+                if keyword_content and await keyword_filter(keywords, keyword_content):
                     sts.add('filtered')
                     continue
-                # Apply size filter (only for files with size)
-                if (max_size or min_size) and file_size and await size_filter(max_size, min_size, file_size):
+                
+                # ============ APPLY EXTENSION FILTER (Only for documents) ============
+                if message.document and await extension_filter(extensions, message.document.file_name):
                     sts.add('filtered')
-                    continue
-                # Apply duplicate filter (only for files with ID)
-                if datas['skip_duplicate'] and file_id and file_id in dup_files:
+                    continue 
+                
+                # ============ APPLY SIZE FILTER (Only for documents) ============
+                if message.document and await size_filter(max_size, min_size, message.document.file_size):
+                    sts.add('filtered')
+                    continue 
+                
+                # ============ DUPLICATE CHECK ============
+                file_id_to_check = None
+                if message.document:
+                    file_id_to_check = message.document.file_id
+                elif message.video:
+                    file_id_to_check = message.video.file_id
+                elif message.photo:
+                    file_id_to_check = message.photo.file_id
+                
+                if file_id_to_check and file_id_to_check in dup_files:
                     sts.add('duplicate')
                     continue
-                if datas['skip_duplicate'] and file_id:
-                    dup_files.append(file_id)
+                
+                # Add to duplicate tracking
+                if file_id_to_check and datas['skip_duplicate']:
+                    dup_files.append(file_id_to_check)
                     if user_have_db:
-                        await user_db.add_file(file_id)
-
-                # Keyword filtering using the new logic
-                if not should_forward(message, file_name, original_caption, custom_caption_text,
-                                      filename_keywords, caption_keywords, custom_caption_keywords,
-                                      legacy_keywords):
-                    sts.add('filtered')
-                    continue
-
-                # If we reached here, the message is allowed
+                        await user_db.add_file(file_id_to_check)
+                
+                # Check if we need to use batch forward or individual copy
                 use_batch = forward_tag and not (link_remove or replace_link)
-
+                
                 if use_batch:
-                    MSG.append(message.id)
-                    notcompleted = len(MSG)
-                    completed = sts.get('total') - sts.get('fetched')
-                    if notcompleted >= 100 or completed <= 100:
-                        await forward(user, client, MSG, m, sts, protect)
-                        sts.add('total_files', notcompleted)
-                        await asyncio.sleep(10)
-                        MSG = []
+                   MSG.append(message.id)
+                   notcompleted = len(MSG)
+                   completed = sts.get('total') - sts.get('fetched')
+                   if ( notcompleted >= 100 
+                        or completed <= 100): 
+                      await forward(user, client, MSG, m, sts, protect)
+                      sts.add('total_files', notcompleted)
+                      await asyncio.sleep(10)
+                      MSG = []
                 else:
-                    new_caption = modify_caption(message, caption, link_remove, replace_link)
-                    details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
-                    await copy(user, client, details, m, sts)
-                    sts.add('total_files')
-                    await asyncio.sleep(sleep)
-
+                   new_caption = modify_caption(message, caption, link_remove, replace_link)
+                   details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
+                   await copy(user, client, details, m, sts)
+                   sts.add('total_files')
+                   await asyncio.sleep(sleep) 
         except Exception as e:
             await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
             print(e)
@@ -300,16 +314,17 @@ async def pub_(bot, message):
                 await user_db.close()
             temp.IS_FRWD_CHAT.remove(sts.TO)
             return await stop(client, user)
-
         temp.IS_FRWD_CHAT.remove(sts.TO)
         await send(client, user, "<b>🎉 ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
-        await edit(user, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts)
+        await edit(user, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts) 
         if user_have_db:
             await user_db.drop_all()
             await user_db.close()
         await stop(client, user)
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def copy(user, bot, msg, m, sts):
    try:                               
@@ -337,7 +352,9 @@ async def copy(user, bot, msg, m, sts):
      print(e)
      sts.add('deleted')
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def forward(user, bot, msg, m, sts, protect):
    try:                             
@@ -352,7 +369,9 @@ async def forward(user, bot, msg, m, sts, protect):
      await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
      await forward(user, bot, msg, m, sts, protect)
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def msg_edit(msg, text, button=None, wait=None):
     try:
@@ -364,7 +383,9 @@ async def msg_edit(msg, text, button=None, wait=None):
            await asyncio.sleep(e.value)
            return await msg_edit(msg, text, button, wait)
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def edit(user, msg, title, status, sts):
    i = sts.get(full=True)
@@ -390,7 +411,9 @@ async def edit(user, msg, title, status, sts):
       button.append([InlineKeyboardButton('• ᴄᴀɴᴄᴇʟ', 'terminate_frwd')])
    await msg_edit(msg, text, InlineKeyboardMarkup(button))
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def is_cancelled(client, user, msg, sts):
    if temp.CANCEL.get(user)==True:
@@ -402,7 +425,9 @@ async def is_cancelled(client, user, msg, sts):
       return True 
    return False 
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def stop(client, user):
    try:
@@ -413,7 +438,9 @@ async def stop(client, user):
    temp.forwardings -= 1
    temp.lock[user] = False 
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def send(bot, user, text):
    try:
@@ -421,93 +448,71 @@ async def send(bot, user, text):
    except:
       pass 
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 def custom_caption(msg, caption, strip_links=False):
-  try:
-    if msg.media:
-        if (msg.video or msg.document or msg.audio or msg.photo):
-            media = getattr(msg, msg.media.value, None)
-            if media:
-                file_name = getattr(media, 'file_name', '')
-                file_size = getattr(media, 'file_size', '')
-                fcaption = getattr(msg, 'caption', '')
-                if fcaption:
-                    fcaption = fcaption.html
-                if strip_links:
-                    fcaption = strip_urls(fcaption)
-                if caption:
-                    return caption.format(filename=file_name, size=get_size(file_size), caption=fcaption)
-                return fcaption
-  except Exception as e:
-      print(f"Error in custom_caption: {e}")
+  if msg.media:
+    if (msg.video or msg.document or msg.audio or msg.photo):
+      media = getattr(msg, msg.media.value, None)
+      if media:
+        file_name = getattr(media, 'file_name', '')
+        file_size = getattr(media, 'file_size', '')
+        fcaption = getattr(msg, 'caption', '')
+        if fcaption:
+          fcaption = fcaption.html
+        if strip_links:
+          fcaption = strip_urls(fcaption)
+        if caption:
+          return caption.format(filename=file_name, size=get_size(file_size), caption=fcaption)
+        return fcaption
   return None
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 def get_size(size):
-  try:
-    units = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB"]
-    size = float(size)
-    i = 0
-    while size >= 1024.0 and i < len(units):
-        i += 1
-        size /= 1024.0
-    return "%.2f %s" % (size, units[i])
-  except:
-      return "0 Bytes"
+  units = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB"]
+  size = float(size)
+  i = 0
+  while size >= 1024.0 and i < len(units):
+     i += 1
+     size /= 1024.0
+  return "%.2f %s" % (size, units[i]) 
 
-# --------------------------------------------------------------
-
-async def keyword_filter(keywords, file_name):
-    if keywords is None:
-        return False
-    if re.search(keywords, file_name):
-        return False
-    else:
-        return True
-
-# --------------------------------------------------------------
-
-async def extension_filter(extensions, file_name):
-    if extensions is None:
-        return False
-    if not re.search(extensions, file_name):
-        return False
-    else:
-        return True
-
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def size_filter(max_size, min_size, file_size):
-    try:
-        file_size = file_size / 1024 / 1024
-        if max_size and min_size == 0:
-            return False
-        if max_size == 0:
-            return file_size < min_size
-        if min_size == 0:
-            return file_size > max_size
-        if not min_size <= file_size <= max_size:
-            return True
-        else:
-            return False
-    except:
+    file_size = file_size / 1024 / 1024
+    if max_size and min_size == 0:
+        return False
+    if max_size == 0:
+        return file_size < min_size
+    if min_size == 0:
+        return file_size > max_size
+    if not min_size <= file_size <= max_size:
+        return True
+    else:
         return False
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 def media(msg):
-  try:
-    if msg.media:
-        media = getattr(msg, msg.media.value, None)
-        if media:
-            return getattr(media, 'file_id', None)
-  except:
-      pass
+  if msg.media:
+     media = getattr(msg, msg.media.value, None)
+     if media:
+        return getattr(media, 'file_id', None)
   return None 
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 def TimeFormatter(milliseconds: int) -> str:
     seconds, milliseconds = divmod(int(milliseconds), 1000)
@@ -521,12 +526,16 @@ def TimeFormatter(milliseconds: int) -> str:
         ((str(milliseconds) + "ms, ") if milliseconds else "")
     return tmp[:-2]
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 def retry_btn(id):
     return InlineKeyboardMarkup([[InlineKeyboardButton('♻️ RETRY ♻️', f"start_public_{id}")]])
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 @Client.on_callback_query(filters.regex(r'^terminate_frwd$'))
 async def terminate_frwding(bot, m):
@@ -535,7 +544,9 @@ async def terminate_frwding(bot, m):
     temp.CANCEL[user_id] = True 
     await m.answer("Forwarding cancelled !", show_alert=True)
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 @Client.on_callback_query(filters.regex(r'^fwrdstatus'))
 async def status_msg(bot, msg):
@@ -554,14 +565,18 @@ async def status_msg(bot, msg):
     est_time = est_time if (est_time != '' or status not in ['completed', 'cancelled']) else '0 s'
     return await msg.answer(PROGRESS.format(percentage, fetched, forwarded, remaining, status, time_to_comple, uptime), show_alert=True)
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 @Client.on_callback_query(filters.regex(r'^close_btn$'))
 async def close(bot, update):
     await update.answer()
     await update.message.delete()
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 @Client.on_message(filters.private & filters.command(['stop']))
 async def stop_forward(client, message):
@@ -577,7 +592,9 @@ async def stop_forward(client, message):
     link = f"tg://openmessage?user_id={6648261085}&message_id={mst['msg_id']}"
     await sts.edit(f"<b>Successfully Canceled </b>", disable_web_page_preview=True)
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def restart_pending_forwads(bot, user):
     user = user['user_id']
@@ -605,12 +622,22 @@ async def restart_pending_forwads(bot, user):
        filter = datas['filters']
        max_size = datas['max_size']
        min_size = datas['min_size']
-       extensions = datas['extensions']
-       filename_keywords = datas.get('filename_keywords')
-       caption_keywords = datas.get('caption_keywords')
-       custom_caption_keywords = datas.get('custom_caption_keywords')
-       legacy_keywords = datas.get('keywords')
-       
+       keyword = datas['keywords']
+       exten = datas['extensions']
+       keywords = ""
+       extensions = ""
+       if keyword:
+           for key in keyword:
+               keywords += f"{key}|"
+           keywords  = keywords.rstrip("|")
+       else:
+           keywords = None
+       if exten:
+           for ext in exten:
+               extensions += f"{ext}|"
+           extensions = extensions.rstrip("|")
+       else:
+           extensions = None
        if not _bot:
           return await msg_edit(m, "<code>You didn't added any bot. Please add a bot using /settings !</code>", wait=True)
        if _bot['is_bot'] == True:
@@ -640,7 +667,6 @@ async def restart_pending_forwads(bot, user):
           return await stop(client, user)
     except:
        return await db.rmve_frwd(user)
-    
     user_have_db = False
     dburi = datas['db_uri']
     if dburi is not None:
@@ -657,6 +683,7 @@ async def restart_pending_forwads(bot, user):
     default_delay = 1 if _bot['is_bot'] else 10
     user_delay = datas['forward_delay']
     sleep = user_delay if user_delay > 0 else default_delay
+    #await msg_edit(m, "<code>processing...</code>") 
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
     dup_files = []
@@ -692,36 +719,42 @@ async def restart_pending_forwads(bot, user):
                    sts.add('deleted')
                    continue
                 
-                # Extract media info
-                media, file_name, file_size, file_id = get_media_info(message)
-                # Original caption
-                original_caption = message.caption or message.text
-                # Custom caption
-                custom_caption_text = custom_caption(message, caption, strip_links=False)
+                # ============ GET CONTENT FOR KEYWORD CHECK ============
+                keyword_content = get_keyword_content(message)
                 
-                # Apply extension filter
-                if extensions and file_name and await extension_filter(extensions, file_name):
+                # ============ APPLY KEYWORD FILTER (For all message types) ============
+                if keyword_content and await keyword_filter(keywords, keyword_content):
                     sts.add('filtered')
                     continue
-                # Apply size filter
-                if (max_size or min_size) and file_size and await size_filter(max_size, min_size, file_size):
+                
+                # ============ APPLY EXTENSION FILTER (Only for documents) ============
+                if message.document and await extension_filter(extensions, message.document.file_name):
                     sts.add('filtered')
-                    continue
-                # Apply duplicate filter
-                if datas['skip_duplicate'] and file_id and file_id in dup_files:
+                    continue 
+                
+                # ============ APPLY SIZE FILTER (Only for documents) ============
+                if message.document and await size_filter(max_size, min_size, message.document.file_size):
+                    sts.add('filtered')
+                    continue 
+                
+                # ============ DUPLICATE CHECK ============
+                file_id_to_check = None
+                if message.document:
+                    file_id_to_check = message.document.file_id
+                elif message.video:
+                    file_id_to_check = message.video.file_id
+                elif message.photo:
+                    file_id_to_check = message.photo.file_id
+                
+                if file_id_to_check and file_id_to_check in dup_files:
                     sts.add('duplicate')
                     continue
-                if datas['skip_duplicate'] and file_id:
-                    dup_files.append(file_id)
-                    if user_have_db:
-                        await user_db.add_file(file_id)
                 
-                # Keyword filtering
-                if not should_forward(message, file_name, original_caption, custom_caption_text,
-                                      filename_keywords, caption_keywords, custom_caption_keywords,
-                                      legacy_keywords):
-                    sts.add('filtered')
-                    continue
+                # Add to duplicate tracking
+                if file_id_to_check and datas['skip_duplicate']:
+                    dup_files.append(file_id_to_check)
+                    if user_have_db:
+                        await user_db.add_file(file_id_to_check)
                 
                 use_batch = forward_tag and not (link_remove or replace_link)
                 
@@ -756,7 +789,9 @@ async def restart_pending_forwads(bot, user):
         await edit(user, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts) 
         await stop(client, user)
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def store_vars(user_id):
     settings = await db.get_forward_details(user_id)
@@ -766,10 +801,13 @@ async def store_vars(user_id):
     STS(id=forward_id).store(settings['chat_id'], settings['toid'], settings['skip'], settings['limit'])
     return forward_id
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def restart_forwards(client):
     users = await db.get_all_frwd()
+    count = await db.forwad_count()
     tasks = []
     async for user in users:
         tasks.append(restart_pending_forwads(client, user))
@@ -779,7 +817,9 @@ async def restart_forwards(client):
     await asyncio.gather(*tasks)
     print('Done')
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def update_forward(user_id, chat_id, start_time, toid, last_id, limit, forward_id, msg_id, fetched, total, duplicate, deleted, skip, filterd):
     details = {
@@ -800,7 +840,9 @@ async def update_forward(user_id, chat_id, start_time, toid, last_id, limit, for
     }
     await db.update_forward(user_id, details)
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def get_bot_uptime(start_time):
     # Calculate the uptime in seconds
@@ -821,7 +863,9 @@ async def get_bot_uptime(start_time):
     uptime_string += f"{uptime_seconds % 60}s"
     return uptime_string  
 
-# --------------------------------------------------------------
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 async def complete_time(total_files, files_per_minute=30):
     minutes_required = total_files / files_per_minute
