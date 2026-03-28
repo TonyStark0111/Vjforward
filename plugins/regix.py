@@ -75,6 +75,27 @@ def modify_caption(message, caption, link_remove, replace_link):
 
     return base_caption
 
+# Helper to get media info from any message (including photos)
+def get_media_info(message):
+    """Extract media object, file_name, file_size, and file_id from a message if present."""
+    if message.document:
+        media = message.document
+    elif message.video:
+        media = message.video
+    elif message.audio:
+        media = message.audio
+    elif message.animation:
+        media = message.animation
+    elif message.photo:
+        media = message.photo[-1] if message.photo else None  # get the largest photo
+    else:
+        return None, None, None, None
+    
+    file_name = getattr(media, 'file_name', None)
+    file_size = getattr(media, 'file_size', None)
+    file_id = getattr(media, 'file_id', None)
+    return media, file_name, file_size, file_id
+
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @KingVJ01
@@ -183,24 +204,42 @@ async def pub_(bot, message):
                 elif message.empty or message.service:
                    sts.add('deleted')
                    continue
-                elif message.document and await extension_filter(extensions, message.document.file_name):
-                   sts.add('filtered')
-                   continue 
-                elif message.document and await keyword_filter(keywords, message.document.file_name):
-                   sts.add('filtered')
-                   continue 
-                elif message.document and await size_filter(max_size, min_size, message.document.file_size):
-                   sts.add('filtered')
-                   continue 
-                elif message.document and message.document.file_id in dup_files:
-                   sts.add('duplicate')
-                   continue
-                if message.document and datas['skip_duplicate']:
-                    dup_files.append(message.document.file_id)
-                    if user_have_db:
-                        await user_db.add_file(message.document.file_id)
                 
-                # Check if we need to use batch forward or individual copy
+                # Extract media info
+                media, file_name, file_size, file_id = get_media_info(message)
+                # Get caption (original) – for text messages it's the text
+                caption_text = message.caption or message.text
+                
+                # Apply extension filter (only if media has a file_name)
+                if extensions and file_name and await extension_filter(extensions, file_name):
+                    sts.add('filtered')
+                    continue
+                # Apply size filter (only if media has file_size)
+                if (max_size or min_size) and file_size and await size_filter(max_size, min_size, file_size):
+                    sts.add('filtered')
+                    continue
+                # Apply keyword filter (check both file_name and caption)
+                if keywords:
+                    text_to_check = ""
+                    if file_name:
+                        text_to_check += file_name + " "
+                    if caption_text:
+                        text_to_check += caption_text
+                    # If the combined text does NOT contain any keyword, filter it out
+                    if not re.search(keywords, text_to_check, re.IGNORECASE):
+                        sts.add('filtered')
+                        continue
+                # Apply duplicate filter (if media has file_id)
+                if datas['skip_duplicate'] and file_id and file_id in dup_files:
+                    sts.add('duplicate')
+                    continue
+                # Record file_id for future duplicates
+                if datas['skip_duplicate'] and file_id:
+                    dup_files.append(file_id)
+                    if user_have_db:
+                        await user_db.add_file(file_id)
+                
+                # If we reach here, the message is allowed
                 use_batch = forward_tag and not (link_remove or replace_link)
                 
                 if use_batch:
@@ -655,22 +694,38 @@ async def restart_pending_forwads(bot, user):
                 elif message.empty or message.service:
                    sts.add('deleted')
                    continue
-                elif message.document and await extension_filter(extensions, message.document.file_name):
-                   sts.add('filtered')
-                   continue 
-                elif message.document and await keyword_filter(keywords, message.document.file_name):
-                   sts.add('filtered')
-                   continue 
-                elif message.document and await size_filter(max_size, min_size, message.document.file_size):
-                   sts.add('filtered')
-                   continue 
-                elif message.document and message.document.file_id in dup_files:
-                   sts.add('duplicate')
-                   continue
-                if message.document and datas['skip_duplicate']:
-                    dup_files.append(message.document.file_id)
+                
+                # Extract media info
+                media, file_name, file_size, file_id = get_media_info(message)
+                # Get caption (original)
+                caption_text = message.caption or message.text
+                
+                # Apply extension filter
+                if extensions and file_name and await extension_filter(extensions, file_name):
+                    sts.add('filtered')
+                    continue
+                # Apply size filter
+                if (max_size or min_size) and file_size and await size_filter(max_size, min_size, file_size):
+                    sts.add('filtered')
+                    continue
+                # Apply keyword filter (check both file_name and caption)
+                if keywords:
+                    text_to_check = ""
+                    if file_name:
+                        text_to_check += file_name + " "
+                    if caption_text:
+                        text_to_check += caption_text
+                    if not re.search(keywords, text_to_check, re.IGNORECASE):
+                        sts.add('filtered')
+                        continue
+                # Apply duplicate filter
+                if datas['skip_duplicate'] and file_id and file_id in dup_files:
+                    sts.add('duplicate')
+                    continue
+                if datas['skip_duplicate'] and file_id:
+                    dup_files.append(file_id)
                     if user_have_db:
-                        await user_db.add_file(message.document.file_id)
+                        await user_db.add_file(file_id)
                 
                 use_batch = forward_tag and not (link_remove or replace_link)
                 
