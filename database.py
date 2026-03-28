@@ -91,9 +91,6 @@ class Db:
             'max_size': 0,
             'extension': None,
             'keywords': None,
-            'filename_keywords': None,       # new: keywords for file names
-            'caption_keywords': None,        # new: keywords for original captions
-            'custom_caption_keywords': None, # new: keywords for your custom caption
             'protect': None,
             'button': None,
             'db_uri': None,
