@@ -413,28 +413,58 @@ async def settings_query(bot, query):
                       callback_data="settings#get_extension")])
     await query.message.edit_text(text="**successfully deleted**",
                                    reply_markup=InlineKeyboardMarkup(buttons))
+
+  # ============ FIXED KEYWORD HANDLER (Preserves spaces) ============
   elif type == "add_keyword":
     await query.message.delete()
-    ask = await bot.ask(user_id, text="**please send the keywords (seperete by space Like:- English 1080p Hdrip)**")
+    ask = await bot.ask(user_id, text="**Send your keywords (one per line or use | to separate):**\n\nExamples:\n`Talent World`\n`Penthouse`\n`Sexart`\n\n**Or multiple:**\n`Talent World|Penthouse|Sexart`\n\nSend /cancel to cancel")
+    
     if ask.text == '/cancel':
        return await ask.reply_text(
                   "<b>process canceled</b>",
                   reply_markup=InlineKeyboardMarkup(buttons))
-    keywords = ask.text.split(" ")
-    keyword = (await get_configs(user_id))['keywords']
-    if keyword:
-        for word in keywords:
-            keyword.append(word)
+    
+    text = ask.text.strip()
+    keywords = []
+    
+    # Check if user used pipe separator
+    if '|' in text:
+        # Split by | and preserve spaces within each keyword
+        keywords = [kw.strip() for kw in text.split('|') if kw.strip()]
+    else:
+        # Treat each line as a separate keyword (preserves spaces)
+        keywords = [line.strip() for line in text.split('\n') if line.strip()]
+        # If only one line with no line breaks, treat as single keyword
+        if len(keywords) == 1 and ' ' in keywords[0]:
+            # Keep as single keyword with space
+            pass
+    
+    if not keywords:
+        return await ask.reply_text("No valid keywords found!")
+    
+    # Get existing keywords
+    existing = (await get_configs(user_id))['keywords']
+    if existing:
+        # Add new keywords to existing list
+        for kw in keywords:
+            if kw not in existing:
+                existing.append(kw)
+        keyword = existing
     else:
         keyword = keywords
+    
     await update_configs(user_id, 'keywords', keyword)
     buttons = []
     buttons.append([InlineKeyboardButton('back', 
                       callback_data="settings#get_keyword")])
+    
+    # Show confirmation with proper formatting
+    kw_list = '\n'.join([f'<code>- {kw}</code>' for kw in keyword])
     await ask.reply_text(
-        f"**successfully updated**",
+        f"**✅ Successfully updated keywords!**\n\n{kw_list}",
         reply_markup=InlineKeyboardMarkup(buttons))
 
+  # ============ FIXED GET KEYWORD DISPLAY ============
   elif type == "get_keyword":
     keywords = (await get_configs(user_id))['keywords']
     btn = []
@@ -442,14 +472,14 @@ async def settings_query(bot, query):
     if keywords:
        text += "**🔖 Keywords:**"
        for key in keywords:
-          text += f"\n<code>-{key}</code>"
+          text += f"\n<code>- {key}</code>"
     else:
-       text += "**You didn't Added Any Keywords**"
+       text += "**No keywords added yet.**\n\nSend a keyword like `Talent World` to forward only files containing that exact phrase."
     btn.append([InlineKeyboardButton('✚ Add', 'settings#add_keyword')])
     btn.append([InlineKeyboardButton('Remove all', 'settings#rmve_all_keyword')])
     btn.append([InlineKeyboardButton('Back', 'settings#extra')])
     await query.message.edit_text(
-        text=f"<b><u>Keywords</u></b>\n\n**Files with these keywords in file name only forwad**\n\n{text}",
+        text=f"<b><u>Keywords</u></b>\n\n**Files with these exact keywords will be forwarded:**\n\n{text}",
         reply_markup=InlineKeyboardMarkup(btn))
 
   elif type == "rmve_all_keyword":
@@ -457,7 +487,7 @@ async def settings_query(bot, query):
     buttons = []
     buttons.append([InlineKeyboardButton('back', 
                       callback_data="settings#get_keyword")])
-    await query.message.edit_text(text="**successfully deleted All Keywords**",
+    await query.message.edit_text(text="**Successfully deleted all keywords**",
                                    reply_markup=InlineKeyboardMarkup(buttons))
   
   # New settings handlers
