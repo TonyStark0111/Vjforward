@@ -95,6 +95,7 @@ class Db:
             'button': None,
             'db_uri': None,
             'link_remove': False,
+            'remove_text': None,
             'forward_delay': 0,
             'replace_link': None,
             'filters': {
