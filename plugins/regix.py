@@ -20,7 +20,7 @@ from pyrogram.errors import FloodWait, MessageNotModified
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message 
 from .db import connect_user_db
 from pyrogram.types import Message
-from .linkremoveforwd import strip_all_links
+from .linkremoveforwd import strip_urls
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -194,17 +194,13 @@ def clean_html_tags(text):
     
     return text
 
-def modify_caption(message, caption, link_remove, replace_link, remove_text):
+def modify_caption(message, caption, link_remove, replace_link):
     """Return the final caption after applying settings."""
     base_caption = custom_caption(message, caption, strip_links=False)
     if not base_caption:
         return None
 
-    # 1. First remove custom text (if any) - this happens BEFORE any other processing
-    if remove_text:
-        base_caption = base_caption.replace(remove_text, '')
-
-    # Clean HTML tags if we're going to modify the caption further
+    # Clean HTML tags if we're going to modify the caption
     if replace_link or link_remove:
         base_caption = clean_html_tags(base_caption)
 
@@ -220,7 +216,7 @@ def modify_caption(message, caption, link_remove, replace_link, remove_text):
             # Replace with URL format
             base_caption = url_pattern.sub(replace_link, base_caption)
     elif link_remove:
-        base_caption = strip_all_links(base_caption)
+        base_caption = strip_urls(base_caption)
 
     return base_caption
 
@@ -312,7 +308,6 @@ async def pub_(bot, message):
           pling=0
           link_remove = datas['link_remove']
           replace_link = datas['replace_link']
-          remove_text = datas.get('remove_text')
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
           async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=sts.get("skip"), filters=filter, max_size=max_size):
                 if await is_cancelled(client, user, m, sts):
@@ -386,7 +381,7 @@ async def pub_(bot, message):
                       await asyncio.sleep(10)
                       MSG = []
                 else:
-                   new_caption = modify_caption(message, caption, link_remove, replace_link, remove_text)
+                   new_caption = modify_caption(message, caption, link_remove, replace_link)
                    details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
                    await copy(user, client, details, m, sts)
                    sts.add('total_files')
@@ -548,7 +543,7 @@ def custom_caption(msg, caption, strip_links=False):
         if fcaption:
           fcaption = fcaption.html
         if strip_links:
-          fcaption = strip_all_links(fcaption)
+          fcaption = strip_urls(fcaption)
         if caption:
           return caption.format(filename=file_name, size=get_size(file_size), caption=fcaption)
         return fcaption
@@ -782,7 +777,6 @@ async def restart_pending_forwads(bot, user):
           pling=0
           link_remove = datas['link_remove']
           replace_link = datas['replace_link']
-          remove_text = datas.get('remove_text')
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
           async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=skiping, filters=filter, max_size=max_size):
                 if await is_cancelled(client, user, m, sts):
@@ -856,7 +850,7 @@ async def restart_pending_forwads(bot, user):
                       await asyncio.sleep(10)
                       MSG = []
                 else:
-                   new_caption = modify_caption(message, caption, link_remove, replace_link, remove_text)
+                   new_caption = modify_caption(message, caption, link_remove, replace_link)
                    details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
                    await copy(user, client, details, m, sts)
                    sts.add('total_files')
