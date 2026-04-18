@@ -414,7 +414,7 @@ async def settings_query(bot, query):
     await query.message.edit_text(text="**successfully deleted**",
                                    reply_markup=InlineKeyboardMarkup(buttons))
 
-  # ============ KEYWORD HANDLER ============
+  # ============ FIXED KEYWORD HANDLER (Preserves spaces) ============
   elif type == "add_keyword":
     await query.message.delete()
     ask = await bot.ask(user_id, text="**Send your keywords (one per line or use | to separate):**\n\nExamples:\n`Talent World`\n`Penthouse`\n`Sexart`\n\n**Or multiple:**\n`Talent World|Penthouse|Sexart`\n\nSend /cancel to cancel")
@@ -427,16 +427,25 @@ async def settings_query(bot, query):
     text = ask.text.strip()
     keywords = []
     
+    # Check if user used pipe separator
     if '|' in text:
+        # Split by | and preserve spaces within each keyword
         keywords = [kw.strip() for kw in text.split('|') if kw.strip()]
     else:
+        # Treat each line as a separate keyword (preserves spaces)
         keywords = [line.strip() for line in text.split('\n') if line.strip()]
+        # If only one line with no line breaks, treat as single keyword
+        if len(keywords) == 1 and ' ' in keywords[0]:
+            # Keep as single keyword with space
+            pass
     
     if not keywords:
         return await ask.reply_text("No valid keywords found!")
     
+    # Get existing keywords
     existing = (await get_configs(user_id))['keywords']
     if existing:
+        # Add new keywords to existing list
         for kw in keywords:
             if kw not in existing:
                 existing.append(kw)
@@ -449,11 +458,13 @@ async def settings_query(bot, query):
     buttons.append([InlineKeyboardButton('back', 
                       callback_data="settings#get_keyword")])
     
+    # Show confirmation with proper formatting
     kw_list = '\n'.join([f'<code>- {kw}</code>' for kw in keyword])
     await ask.reply_text(
         f"**✅ Successfully updated keywords!**\n\n{kw_list}",
         reply_markup=InlineKeyboardMarkup(buttons))
 
+  # ============ FIXED GET KEYWORD DISPLAY ============
   elif type == "get_keyword":
     keywords = (await get_configs(user_id))['keywords']
     btn = []
@@ -479,7 +490,7 @@ async def settings_query(bot, query):
     await query.message.edit_text(text="**Successfully deleted all keywords**",
                                    reply_markup=InlineKeyboardMarkup(buttons))
   
-  # ============ LINK REMOVAL TOGGLE ============
+  # New settings handlers
   elif type == "toggle_link_remove":
     config = await get_configs(user_id)
     current = config.get('link_remove', False)
@@ -488,49 +499,16 @@ async def settings_query(bot, query):
     markup = await extra_buttons(user_id)
     await query.message.edit_reply_markup(markup)
 
-  # ============ CUSTOM TEXT REMOVER ============
-  elif type == "set_remove_text":
-    await query.message.delete()
-    msg = await bot.ask(
-        user_id,
-        "**✂️ Remove Custom Text**\n\n"
-        "Send the **exact text** you want to remove from captions.\n\n"
-        "**Example:**\n"
-        "`( 👉Our backup channel👇 https://t.me/Link_lele_bhai9 )`\n\n"
-        "**Commands:**\n"
-        "• `/cancel` - Cancel\n"
-        "• `/remove` - Delete existing custom text\n\n"
-        "Send your text now:"
-    )
-    if msg.text == "/cancel":
-        return await msg.reply("❌ Cancelled.")
-    if msg.text == "/remove":
-        await update_configs(user_id, 'remove_text', None)
-        return await msg.reply("✅ Custom text removed.")
-    
-    text_to_remove = msg.text
-    await update_configs(user_id, 'remove_text', text_to_remove)
-    await msg.reply(f"✅ **Custom text saved!**\n\nWill remove:\n`{text_to_remove}`")
-    markup = await extra_buttons(user_id)
-    await msg.reply("Extra settings:", reply_markup=markup)
-
-  elif type == "forward_delay":
-     config = await get_configs(user_id)
-     current = config.get('forward_delay', 0)
-     await query.answer(f"Current delay: {current if current > 0 else 'Default'}", show_alert=True)
-
   elif type == "set_forward_delay":
     await query.message.delete()
     msg = await bot.ask(
         user_id,
-        "**⏱ Forward Delay**\n\n"
-        "Send the delay in seconds between forwarded messages.\n\n"
-        "• `0` = use default (1s for bot, 10s for userbot)\n"
-        "• `1` to `60` = custom seconds\n\n"
+        "**Send the delay in seconds between forwarded messages.**\n\n"
+        "`0` = use default (1s for bot, 10s for userbot)\n"
         "**/cancel** - cancel this process"
     )
     if msg.text == "/cancel":
-        return await msg.reply("❌ Cancelled.")
+        return await msg.reply("Cancelled.")
     try:
         delay = int(msg.text)
         if delay < 0:
@@ -538,45 +516,42 @@ async def settings_query(bot, query):
     except ValueError:
         return await msg.reply("Invalid number. Please send a valid integer.")
     await update_configs(user_id, 'forward_delay', delay)
-    await msg.reply(f"✅ Forward delay set to {delay} seconds.")
+    await msg.reply(f"Forward delay set to {delay} seconds.")
     markup = await extra_buttons(user_id)
     await msg.reply("Extra settings:", reply_markup=markup)
-
-  elif type == "replace_link":
-     config = await get_configs(user_id)
-     current = config.get('replace_link', None)
-     await query.answer(f"Current replacement: {current if current else 'None'}", show_alert=True)
 
   elif type == "set_replace_link":
     await query.message.delete()
     msg = await bot.ask(
         user_id,
-        "**🔄 Replacement Link**\n\n"
-        "Send the replacement text for all links.\n\n"
+        "**Send the replacement text**\n\n"
         "You can use:\n"
         "• `@username` - for Telegram username\n"
         "• `https://example.com` - for any URL\n"
         "• `none` - to disable replacement\n\n"
         "**Examples:**\n"
         "`@mynewchannel`\n"
-        "`https://t.me/mynewchannel`\n\n"
+        "`https://t.me/mynewchannel`\n"
+        "`@NewChannel`\n\n"
         "**/cancel** - cancel this process"
     )
     if msg.text == "/cancel":
-        return await msg.reply("❌ Cancelled.")
+        return await msg.reply("Cancelled.")
     
     link = msg.text.strip()
     
     if link.lower() == "none":
         link = None
     elif link.startswith('@'):
+        # Valid username format (at least 5 characters after @)
         if not re.match(r'^@[a-zA-Z][a-zA-Z0-9_]{4,}$', link):
             return await msg.reply("Invalid username format. Username must start with @ followed by at least 5 characters (letters, numbers, underscore)")
+        link = link  # Keep as is
     elif not link.startswith(('http://', 'https://')):
         return await msg.reply("Invalid input. Must start with http://, https://, @username, or 'none'")
     
     await update_configs(user_id, 'replace_link', link)
-    await msg.reply(f"✅ Replacement text set to: `{link if link else 'disabled'}`")
+    await msg.reply(f"Replacement text set to: `{link if link else 'disabled'}`")
     markup = await extra_buttons(user_id)
     await msg.reply("Extra settings:", reply_markup=markup)
 
@@ -590,20 +565,19 @@ async def settings_query(bot, query):
 
 async def extra_buttons(user_id):
     config = await get_configs(user_id)
+    # Safely get values with defaults if keys don't exist
     link_remove = config.get('link_remove', False)
     forward_delay = config.get('forward_delay', 0)
     replace_link = config.get('replace_link', None)
-    remove_text = config.get('remove_text', None)
     
     delay_text = str(forward_delay) if forward_delay > 0 else 'Default'
-    replace_text = 'Set' if replace_link else 'None'
-    remove_text_status = 'Set' if remove_text else 'None'
+    replace_text = 'Set' if not replace_link else 'Change'
     
     buttons = [[
-        InlineKeyboardButton('💾 Min Size Limit',
+        InlineKeyboardButton('💾 Mɪɴ Sɪᴢᴇ Lɪᴍɪᴛ',
                     callback_data=f'settings#file_size')
         ],[
-        InlineKeyboardButton('💾 Max Size Limit',
+        InlineKeyboardButton('💾 Mᴀx Sɪᴢᴇ Lɪᴍɪᴛ',
                     callback_data=f'settings#maxfile_size')
         ],[
         InlineKeyboardButton('🚥 Keywords',
@@ -611,15 +585,10 @@ async def extra_buttons(user_id):
         InlineKeyboardButton('🕹 Extensions',
                     callback_data=f'settings#get_extension')
         ],[
-        InlineKeyboardButton('🔗 Remove All Links',
+        InlineKeyboardButton('🔗 Link Removal',
                     callback_data=f'settings#link_remove'),
         InlineKeyboardButton('✅' if link_remove else '❌',
                     callback_data=f'settings#toggle_link_remove')
-        ],[
-        InlineKeyboardButton('✂️ Remove Custom Text',
-                    callback_data=f'settings#remove_text'),
-        InlineKeyboardButton(remove_text_status,
-                    callback_data=f'settings#set_remove_text')
         ],[
         InlineKeyboardButton('⏱ Forward Delay',
                     callback_data=f'settings#forward_delay'),
@@ -631,7 +600,7 @@ async def extra_buttons(user_id):
         InlineKeyboardButton(replace_text,
                     callback_data=f'settings#set_replace_link')
         ],[
-        InlineKeyboardButton('⫷ Back',
+        InlineKeyboardButton('⫷ Bᴀᴄᴋ',
                     callback_data=f'settings#main')
         ]]
     return InlineKeyboardMarkup(buttons)
@@ -642,25 +611,25 @@ async def extra_buttons(user_id):
 
 def main_buttons():
   buttons = [[
-       InlineKeyboardButton('🤖 Bots',
+       InlineKeyboardButton('🤖 Bᴏᴛs',
                     callback_data=f'settings#bots'),
-       InlineKeyboardButton('🏷 Channels',
+       InlineKeyboardButton('🏷 Cʜᴀɴɴᴇʟs',
                     callback_data=f'settings#channels')
        ],[
-       InlineKeyboardButton('🖋️ Caption',
+       InlineKeyboardButton('🖋️ Cᴀᴘᴛɪᴏɴ',
                     callback_data=f'settings#caption'),
-       InlineKeyboardButton('⏹ Button',
+       InlineKeyboardButton('⏹ Bᴜᴛᴛᴏɴ',
                     callback_data=f'settings#button')
        ],[
-       InlineKeyboardButton('🕵‍♀ Filters 🕵‍♀',
+       InlineKeyboardButton('🕵‍♀ Fɪʟᴛᴇʀs 🕵‍♀',
                     callback_data=f'settings#filters'),
-       InlineKeyboardButton('🗃 Mongo DB',
+       InlineKeyboardButton('🗃 MᴏɴɢᴏDB',
                     callback_data=f'settings#database')
        ],[
-       InlineKeyboardButton('Extra Settings 🧪',
+       InlineKeyboardButton('Exᴛʀᴀ Sᴇᴛᴛɪɴɢs 🧪',
                     callback_data=f'settings#extra')
        ],[
-       InlineKeyboardButton('⫷ Back',
+       InlineKeyboardButton('⫷ Bᴀᴄᴋ',
                     callback_data=f'help')
        ]]
   return InlineKeyboardMarkup(buttons)
