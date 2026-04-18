@@ -4,14 +4,14 @@
 
 import re
 
-# Pattern to match http://, https://, t.me/, and @mentions
-ALL_LINKS_PATTERN = re.compile(
+# Regular expression to match http://, https://, t.me/, and @mentions
+URL_PATTERN = re.compile(
     r'(https?://\S+|t\.me/\S+|@\S+)',
     re.IGNORECASE
 )
 
-def strip_all_links(text: str) -> str:
-    """Remove URLs, t.me links, and @mentions."""
+def strip_urls(text: str) -> str:
+    """Remove all URLs, t.me links, and @mentions from the given text."""
     if not text:
         return text
-    return ALL_LINKS_PATTERN.sub('', text).strip()
+    return URL_PATTERN.sub('', text).strip()
