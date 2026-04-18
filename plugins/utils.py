@@ -62,9 +62,8 @@ class STS:
         button = parse_buttons(configs['button'] if configs['button'] else '')
         return bot, configs['caption'], configs['forward_tag'], {'filters': filters,
                 'keywords': configs['keywords'], 'min_size': min, 'max_size': max, 'extensions': configs['extension'], 
-                'skip_duplicate': duplicate, 'db_uri': configs['db_uri'], 'link_remove': configs.get('link_remove', False),
-                'remove_text': configs.get('remove_text'), 'forward_delay': configs['forward_delay'], 
-                'replace_link': configs['replace_link']}, configs['protect'], button
+                'skip_duplicate': duplicate, 'db_uri': configs['db_uri'], 'link_remove': configs['link_remove'],
+                'forward_delay': configs['forward_delay'], 'replace_link': configs['replace_link']}, configs['protect'], button
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
