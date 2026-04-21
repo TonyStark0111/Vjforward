@@ -17,7 +17,7 @@ from config import Config, temp
 from script import Script
 from pyrogram import Client, filters 
 from pyrogram.errors import FloodWait, MessageNotModified
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message 
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message, InputMediaPhoto, InputMediaVideo
 from .db import connect_user_db
 from pyrogram.types import Message
 from .linkremoveforwd import strip_urls
@@ -220,6 +220,161 @@ def modify_caption(message, caption, link_remove, replace_link):
 
     return base_caption
 
+
+# ============ HELPER FUNCTIONS FOR MEDIA GROUP PROCESSING ============
+
+async def process_single_message(user, client, message, m, sts, caption, link_remove, replace_link, button, protect, datas, dup_files, user_have_db, user_db, sleep, pling, keywords, extensions, max_size, min_size):
+    """Process one message (non‑album or fallback)."""
+    # Apply filters
+    if await should_filter_by_keywords(keywords, message):
+        sts.add('filtered')
+        return pling
+    if message.document and await extension_filter(extensions, message.document.file_name):
+        sts.add('filtered')
+        return pling
+    if message.document and await size_filter(max_size, min_size, message.document.file_size):
+        sts.add('filtered')
+        return pling
+
+    file_id = None
+    if message.document:
+        file_id = message.document.file_id
+    elif message.video:
+        file_id = message.video.file_id
+    elif message.photo:
+        file_id = message.photo.file_id
+    elif message.audio:
+        file_id = message.audio.file_id
+    elif message.animation:
+        file_id = message.animation.file_id
+
+    if file_id and file_id in dup_files:
+        sts.add('duplicate')
+        return pling
+
+    # Add to duplicate tracking
+    if file_id and datas['skip_duplicate']:
+        dup_files.append(file_id)
+        if user_have_db:
+            await user_db.add_file(file_id)
+
+    new_caption = modify_caption(message, caption, link_remove, replace_link)
+    details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
+    await copy(user, client, details, m, sts)
+    sts.add('total_files')
+    await asyncio.sleep(sleep)
+
+    # Update progress every ~20 messages
+    pling += 1
+    if pling % 20 == 0:
+        await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+    return pling
+
+
+async def process_media_group(user, client, group_messages, m, sts, caption, link_remove, replace_link, button, protect, datas, dup_files, user_have_db, user_db, sleep, pling, keywords, extensions, max_size, min_size):
+    """Send a media group as an album if all messages are photos/videos and pass filters."""
+    # 1. Apply filters to every message in the group
+    filtered_out = False
+    for msg in group_messages:
+        if await should_filter_by_keywords(keywords, msg):
+            sts.add('filtered')
+            filtered_out = True
+        elif msg.document and await extension_filter(extensions, msg.document.file_name):
+            sts.add('filtered')
+            filtered_out = True
+        elif msg.document and await size_filter(max_size, min_size, msg.document.file_size):
+            sts.add('filtered')
+            filtered_out = True
+        # Duplicate check per message
+        file_id = None
+        if msg.document:
+            file_id = msg.document.file_id
+        elif msg.video:
+            file_id = msg.video.file_id
+        elif msg.photo:
+            file_id = msg.photo.file_id
+        elif msg.audio:
+            file_id = msg.audio.file_id
+        elif msg.animation:
+            file_id = msg.animation.file_id
+        if file_id and file_id in dup_files:
+            sts.add('duplicate')
+            filtered_out = True
+        if filtered_out:
+            break
+
+    if filtered_out:
+        # Skip the whole group
+        return pling
+
+    # 2. Check if all messages are photos or videos (album‑compatible)
+    media_list = []
+    all_supported = True
+    for msg in group_messages:
+        if msg.photo:
+            file_id = msg.photo.file_id
+            input_media = InputMediaPhoto(media=file_id)
+        elif msg.video:
+            file_id = msg.video.file_id
+            input_media = InputMediaVideo(media=file_id)
+        else:
+            all_supported = False
+            break
+        # Apply caption modifications per message
+        new_caption = modify_caption(msg, caption, link_remove, replace_link)
+        if new_caption:
+            input_media.caption = new_caption
+        media_list.append(input_media)
+
+    if not all_supported:
+        # Fallback: send each message individually
+        for msg in group_messages:
+            pling = await process_single_message(user, client, msg, m, sts, caption, link_remove, replace_link, button, protect, datas, dup_files, user_have_db, user_db, sleep, pling, keywords, extensions, max_size, min_size)
+        return pling
+
+    # 3. Send the album
+    try:
+        await client.send_media_group(
+            chat_id=sts.get('TO'),
+            media=media_list,
+            protect_content=protect,
+            reply_markup=button
+        )
+    except FloodWait as e:
+        await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', e.value, sts)
+        await asyncio.sleep(e.value)
+        await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+        await client.send_media_group(
+            chat_id=sts.get('TO'),
+            media=media_list,
+            protect_content=protect,
+            reply_markup=button
+        )
+    except Exception as e:
+        print(e)
+        sts.add('deleted')
+        return pling
+
+    # Update counters and duplicate tracking
+    sts.add('total_files', len(group_messages))
+    for msg in group_messages:
+        file_id = None
+        if msg.photo:
+            file_id = msg.photo.file_id
+        elif msg.video:
+            file_id = msg.video.file_id
+        if file_id and datas['skip_duplicate']:
+            dup_files.append(file_id)
+            if user_have_db:
+                await user_db.add_file(file_id)
+
+    await asyncio.sleep(sleep)
+    pling += len(group_messages)
+    if pling % 20 == 0:
+        await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+    return pling
+
+
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @KingVJ01
@@ -309,16 +464,17 @@ async def pub_(bot, message):
           link_remove = datas['link_remove']
           replace_link = datas['replace_link']
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+          
+          # ============ MEDIA GROUP AWARE FORWARDING LOOP ============
+          group_buffer = []
+          current_group_id = None
+          
           async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=sts.get("skip"), filters=filter, max_size=max_size):
                 if await is_cancelled(client, user, m, sts):
                    if user_have_db:
                       await user_db.drop_all()
                       await user_db.close()
                    return
-                if pling %20 == 0: 
-                   await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
-                pling += 1
-                sts.add('fetched')
                 if message == "DUPLICATE":
                    sts.add('duplicate')
                    continue
@@ -329,48 +485,13 @@ async def pub_(bot, message):
                    sts.add('deleted')
                    continue
                 
-                # ============ APPLY EXACT KEYWORD FILTER (Checks file name AND caption for all media types) ============
-                if await should_filter_by_keywords(keywords, message):
-                    sts.add('filtered')
-                    continue
-                
-                # ============ APPLY EXTENSION FILTER (Only for documents) ============
-                if message.document and await extension_filter(extensions, message.document.file_name):
-                    sts.add('filtered')
-                    continue 
-                
-                # ============ APPLY SIZE FILTER (Only for documents) ============
-                if message.document and await size_filter(max_size, min_size, message.document.file_size):
-                    sts.add('filtered')
-                    continue 
-                
-                # ============ DUPLICATE CHECK ============
-                file_id_to_check = None
-                if message.document:
-                    file_id_to_check = message.document.file_id
-                elif message.video:
-                    file_id_to_check = message.video.file_id
-                elif message.photo:
-                    file_id_to_check = message.photo.file_id
-                elif message.audio:
-                    file_id_to_check = message.audio.file_id
-                elif message.animation:
-                    file_id_to_check = message.animation.file_id
-                
-                if file_id_to_check and file_id_to_check in dup_files:
-                    sts.add('duplicate')
-                    continue
-                
-                # Add to duplicate tracking
-                if file_id_to_check and datas['skip_duplicate']:
-                    dup_files.append(file_id_to_check)
-                    if user_have_db:
-                        await user_db.add_file(file_id_to_check)
+                sts.add('fetched')
                 
                 # Check if we need to use batch forward or individual copy
                 use_batch = forward_tag and not (link_remove or replace_link)
                 
                 if use_batch:
+                   # Original batch forward logic (unchanged)
                    MSG.append(message.id)
                    notcompleted = len(MSG)
                    completed = sts.get('total') - sts.get('fetched')
@@ -381,11 +502,48 @@ async def pub_(bot, message):
                       await asyncio.sleep(10)
                       MSG = []
                 else:
-                   new_caption = modify_caption(message, caption, link_remove, replace_link)
-                   details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
-                   await copy(user, client, details, m, sts)
-                   sts.add('total_files')
-                   await asyncio.sleep(sleep) 
+                   # New media group aware logic
+                   if hasattr(message, 'media_group_id') and message.media_group_id:
+                       if current_group_id is None:
+                           # Start new group
+                           group_buffer = [message]
+                           current_group_id = message.media_group_id
+                       elif message.media_group_id == current_group_id:
+                           group_buffer.append(message)
+                       else:
+                           # Process previous group, then start new one
+                           pling = await process_media_group(
+                               user, client, group_buffer, m, sts, caption, link_remove, replace_link,
+                               button, protect, datas, dup_files, user_have_db, user_db, sleep, pling,
+                               keywords, extensions, max_size, min_size
+                           )
+                           group_buffer = [message]
+                           current_group_id = message.media_group_id
+                   else:
+                       # No media group – process pending group first, then single message
+                       if group_buffer:
+                           pling = await process_media_group(
+                               user, client, group_buffer, m, sts, caption, link_remove, replace_link,
+                               button, protect, datas, dup_files, user_have_db, user_db, sleep, pling,
+                               keywords, extensions, max_size, min_size
+                           )
+                           group_buffer = []
+                           current_group_id = None
+                       # Process single message
+                       pling = await process_single_message(
+                           user, client, message, m, sts, caption, link_remove, replace_link,
+                           button, protect, datas, dup_files, user_have_db, user_db, sleep, pling,
+                           keywords, extensions, max_size, min_size
+                       )
+          
+          # After the loop, process any remaining group
+          if group_buffer and not use_batch:
+              await process_media_group(
+                  user, client, group_buffer, m, sts, caption, link_remove, replace_link,
+                  button, protect, datas, dup_files, user_have_db, user_db, sleep, pling,
+                  keywords, extensions, max_size, min_size
+              )
+              
         except Exception as e:
             await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
             print(e)
@@ -401,6 +559,7 @@ async def pub_(bot, message):
             await user_db.drop_all()
             await user_db.close()
         await stop(client, user)
+
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -778,6 +937,11 @@ async def restart_pending_forwads(bot, user):
           link_remove = datas['link_remove']
           replace_link = datas['replace_link']
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+          
+          # ============ MEDIA GROUP AWARE FORWARDING LOOP (RESTART) ============
+          group_buffer = []
+          current_group_id = None
+          
           async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=skiping, filters=filter, max_size=max_size):
                 if await is_cancelled(client, user, m, sts):
                     if user_have_db:
@@ -785,10 +949,6 @@ async def restart_pending_forwads(bot, user):
                        await user_db.close()
                        return
                     return
-                if pling %20 == 0: 
-                   await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
-                pling += 1
-                sts.add('fetched')
                 if message == "DUPLICATE":
                    sts.add('duplicate')
                    continue
@@ -799,47 +959,13 @@ async def restart_pending_forwads(bot, user):
                    sts.add('deleted')
                    continue
                 
-                # ============ APPLY EXACT KEYWORD FILTER (Checks file name AND caption for all media types) ============
-                if await should_filter_by_keywords(keywords, message):
-                    sts.add('filtered')
-                    continue
+                sts.add('fetched')
                 
-                # ============ APPLY EXTENSION FILTER (Only for documents) ============
-                if message.document and await extension_filter(extensions, message.document.file_name):
-                    sts.add('filtered')
-                    continue 
-                
-                # ============ APPLY SIZE FILTER (Only for documents) ============
-                if message.document and await size_filter(max_size, min_size, message.document.file_size):
-                    sts.add('filtered')
-                    continue 
-                
-                # ============ DUPLICATE CHECK ============
-                file_id_to_check = None
-                if message.document:
-                    file_id_to_check = message.document.file_id
-                elif message.video:
-                    file_id_to_check = message.video.file_id
-                elif message.photo:
-                    file_id_to_check = message.photo.file_id
-                elif message.audio:
-                    file_id_to_check = message.audio.file_id
-                elif message.animation:
-                    file_id_to_check = message.animation.file_id
-                
-                if file_id_to_check and file_id_to_check in dup_files:
-                    sts.add('duplicate')
-                    continue
-                
-                # Add to duplicate tracking
-                if file_id_to_check and datas['skip_duplicate']:
-                    dup_files.append(file_id_to_check)
-                    if user_have_db:
-                        await user_db.add_file(file_id_to_check)
-                
+                # Check if we need to use batch forward or individual copy
                 use_batch = forward_tag and not (link_remove or replace_link)
                 
                 if use_batch:
+                   # Original batch forward logic (unchanged)
                    MSG.append(message.id)
                    notcompleted = len(MSG)
                    completed = sts.get('total') - sts.get('fetched')
@@ -850,11 +976,48 @@ async def restart_pending_forwads(bot, user):
                       await asyncio.sleep(10)
                       MSG = []
                 else:
-                   new_caption = modify_caption(message, caption, link_remove, replace_link)
-                   details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
-                   await copy(user, client, details, m, sts)
-                   sts.add('total_files')
-                   await asyncio.sleep(sleep) 
+                   # New media group aware logic
+                   if hasattr(message, 'media_group_id') and message.media_group_id:
+                       if current_group_id is None:
+                           # Start new group
+                           group_buffer = [message]
+                           current_group_id = message.media_group_id
+                       elif message.media_group_id == current_group_id:
+                           group_buffer.append(message)
+                       else:
+                           # Process previous group, then start new one
+                           pling = await process_media_group(
+                               user, client, group_buffer, m, sts, caption, link_remove, replace_link,
+                               button, protect, datas, dup_files, user_have_db, user_db, sleep, pling,
+                               keywords, extensions, max_size, min_size
+                           )
+                           group_buffer = [message]
+                           current_group_id = message.media_group_id
+                   else:
+                       # No media group – process pending group first, then single message
+                       if group_buffer:
+                           pling = await process_media_group(
+                               user, client, group_buffer, m, sts, caption, link_remove, replace_link,
+                               button, protect, datas, dup_files, user_have_db, user_db, sleep, pling,
+                               keywords, extensions, max_size, min_size
+                           )
+                           group_buffer = []
+                           current_group_id = None
+                       # Process single message
+                       pling = await process_single_message(
+                           user, client, message, m, sts, caption, link_remove, replace_link,
+                           button, protect, datas, dup_files, user_have_db, user_db, sleep, pling,
+                           keywords, extensions, max_size, min_size
+                       )
+          
+          # After the loop, process any remaining group
+          if group_buffer and not use_batch:
+              await process_media_group(
+                  user, client, group_buffer, m, sts, caption, link_remove, replace_link,
+                  button, protect, datas, dup_files, user_have_db, user_db, sleep, pling,
+                  keywords, extensions, max_size, min_size
+              )
+              
         except Exception as e:
             await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
             if user_have_db:
