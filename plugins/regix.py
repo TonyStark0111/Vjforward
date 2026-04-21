@@ -17,7 +17,7 @@ from config import Config, temp
 from script import Script
 from pyrogram import Client, filters 
 from pyrogram.errors import FloodWait, MessageNotModified
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message 
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message, InputMediaPhoto, InputMediaVideo, InputMediaAnimation
 from .db import connect_user_db
 from pyrogram.types import Message
 from .linkremoveforwd import strip_urls
@@ -220,6 +220,113 @@ def modify_caption(message, caption, link_remove, replace_link):
 
     return base_caption
 
+
+# ============ ALBUM (MEDIA GROUP) SENDING HELPER ============
+
+async def send_album(
+    user, client, messages, m, sts, protect,
+    caption, link_remove, replace_link, button, datas, user_have_db, dup_files, user_db=None
+):
+    """
+    Send a list of messages as a Telegram media group (album).
+    Returns number of successfully sent media.
+    """
+    input_media = []
+    sent_count = 0
+
+    for msg in messages:
+        if msg.empty or msg.service:
+            sts.add('deleted')
+            continue
+
+        # Apply keyword filter
+        keywords = datas.get('keywords')
+        if keywords and await should_filter_by_keywords(keywords, msg):
+            sts.add('filtered')
+            continue
+
+        # Determine media type and file_id
+        file_id = None
+        media_type = None
+        if msg.photo:
+            file_id = msg.photo.file_id
+            media_type = "photo"
+        elif msg.video:
+            file_id = msg.video.file_id
+            media_type = "video"
+            # Size filter for video
+            max_size = datas.get('max_size', 0)
+            min_size = datas.get('min_size', 0)
+            if await size_filter(max_size, min_size, msg.video.file_size):
+                sts.add('filtered')
+                continue
+        elif msg.animation:
+            file_id = msg.animation.file_id
+            media_type = "animation"
+        else:
+            # Unsupported for album
+            sts.add('filtered')
+            continue
+
+        # Duplicate check
+        if datas.get('skip_duplicate') and file_id in dup_files:
+            sts.add('duplicate')
+            continue
+
+        # Build caption
+        new_caption = modify_caption(msg, caption, link_remove, replace_link)
+
+        # Create InputMedia object
+        if media_type == "photo":
+            input_media.append(InputMediaPhoto(media=file_id, caption=new_caption or ""))
+        elif media_type == "video":
+            input_media.append(InputMediaVideo(media=file_id, caption=new_caption or ""))
+        elif media_type == "animation":
+            input_media.append(InputMediaAnimation(media=file_id, caption=new_caption or ""))
+
+        # Track duplicate
+        if datas.get('skip_duplicate'):
+            dup_files.append(file_id)
+            if user_have_db and user_db:
+                await user_db.add_file(file_id)
+
+        sent_count += 1
+
+    if not input_media:
+        return 0
+
+    # Send in chunks of 10 (Telegram limit)
+    for i in range(0, len(input_media), 10):
+        chunk = input_media[i:i+10]
+        try:
+            await client.send_media_group(
+                chat_id=sts.get('TO'),
+                media=chunk,
+                protect_content=protect
+            )
+        except FloodWait as e:
+            await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', e.value, sts)
+            await asyncio.sleep(e.value)
+            await client.send_media_group(
+                chat_id=sts.get('TO'),
+                media=chunk,
+                protect_content=protect
+            )
+        except Exception as e:
+            print(f"Album send error: {e}")
+            # Fallback: send individually
+            for media in chunk:
+                await client.send_cached_media(
+                    chat_id=sts.get('TO'),
+                    file_id=media.media,
+                    caption=media.caption,
+                    protect_content=protect
+                )
+                await asyncio.sleep(1)
+
+    return sent_count
+
+
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @KingVJ01
@@ -309,6 +416,12 @@ async def pub_(bot, message):
           link_remove = datas['link_remove']
           replace_link = datas['replace_link']
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+          
+          # Album grouping variables
+          current_group_id = None
+          current_group_msgs = []
+          use_albums = not forward_tag   # Disable albums if forward_tag is True (batch forward mode)
+          
           async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=sts.get("skip"), filters=filter, max_size=max_size):
                 if await is_cancelled(client, user, m, sts):
                    if user_have_db:
@@ -370,22 +483,67 @@ async def pub_(bot, message):
                 # Check if we need to use batch forward or individual copy
                 use_batch = forward_tag and not (link_remove or replace_link)
                 
-                if use_batch:
-                   MSG.append(message.id)
-                   notcompleted = len(MSG)
-                   completed = sts.get('total') - sts.get('fetched')
-                   if ( notcompleted >= 100 
-                        or completed <= 100): 
-                      await forward(user, client, MSG, m, sts, protect)
-                      sts.add('total_files', notcompleted)
-                      await asyncio.sleep(10)
-                      MSG = []
+                # ============ ALBUM HANDLING (if forward_tag is OFF) ============
+                if not use_batch and use_albums and (message.photo or message.video or message.animation) and message.media_group_id:
+                    # Part of an album
+                    if current_group_id == message.media_group_id:
+                        current_group_msgs.append(message)
+                    else:
+                        # Flush previous group
+                        if current_group_msgs:
+                            sent = await send_album(
+                                user, client, current_group_msgs, m, sts, protect,
+                                caption, link_remove, replace_link, button,
+                                datas, user_have_db, dup_files, user_db if user_have_db else None
+                            )
+                            sts.add('total_files', sent)
+                            await asyncio.sleep(sleep)
+                        # Start new group
+                        current_group_id = message.media_group_id
+                        current_group_msgs = [message]
+                    continue  # Skip immediate sending
+                
                 else:
-                   new_caption = modify_caption(message, caption, link_remove, replace_link)
-                   details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
-                   await copy(user, client, details, m, sts)
-                   sts.add('total_files')
-                   await asyncio.sleep(sleep) 
+                    # No album (either document, text, single media, or batch mode enabled)
+                    # Flush any pending album first
+                    if current_group_msgs:
+                        sent = await send_album(
+                            user, client, current_group_msgs, m, sts, protect,
+                            caption, link_remove, replace_link, button,
+                            datas, user_have_db, dup_files, user_db if user_have_db else None
+                        )
+                        sts.add('total_files', sent)
+                        await asyncio.sleep(sleep)
+                        current_group_msgs = []
+                        current_group_id = None
+                    
+                    # Now handle the current message
+                    if use_batch:
+                       MSG.append(message.id)
+                       notcompleted = len(MSG)
+                       completed = sts.get('total') - sts.get('fetched')
+                       if ( notcompleted >= 100 
+                            or completed <= 100): 
+                          await forward(user, client, MSG, m, sts, protect)
+                          sts.add('total_files', notcompleted)
+                          await asyncio.sleep(10)
+                          MSG = []
+                    else:
+                       new_caption = modify_caption(message, caption, link_remove, replace_link)
+                       details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
+                       await copy(user, client, details, m, sts)
+                       sts.add('total_files')
+                       await asyncio.sleep(sleep) 
+          
+          # After loop, flush any remaining album
+          if current_group_msgs:
+              sent = await send_album(
+                  user, client, current_group_msgs, m, sts, protect,
+                  caption, link_remove, replace_link, button,
+                  datas, user_have_db, dup_files, user_db if user_have_db else None
+              )
+              sts.add('total_files', sent)
+          
         except Exception as e:
             await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
             print(e)
@@ -778,6 +936,12 @@ async def restart_pending_forwads(bot, user):
           link_remove = datas['link_remove']
           replace_link = datas['replace_link']
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+          
+          # Album grouping variables for restart
+          current_group_id = None
+          current_group_msgs = []
+          use_albums = not forward_tag
+          
           async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=skiping, filters=filter, max_size=max_size):
                 if await is_cancelled(client, user, m, sts):
                     if user_have_db:
@@ -799,7 +963,7 @@ async def restart_pending_forwads(bot, user):
                    sts.add('deleted')
                    continue
                 
-                # ============ APPLY EXACT KEYWORD FILTER (Checks file name AND caption for all media types) ============
+                # ============ APPLY EXACT KEYWORD FILTER ============
                 if await should_filter_by_keywords(keywords, message):
                     sts.add('filtered')
                     continue
@@ -839,22 +1003,61 @@ async def restart_pending_forwads(bot, user):
                 
                 use_batch = forward_tag and not (link_remove or replace_link)
                 
-                if use_batch:
-                   MSG.append(message.id)
-                   notcompleted = len(MSG)
-                   completed = sts.get('total') - sts.get('fetched')
-                   if ( notcompleted >= 100 
-                        or completed <= 100): 
-                      await forward(user, client, MSG, m, sts, protect)
-                      sts.add('total_files', notcompleted)
-                      await asyncio.sleep(10)
-                      MSG = []
+                # ============ ALBUM HANDLING (if forward_tag is OFF) ============
+                if not use_batch and use_albums and (message.photo or message.video or message.animation) and message.media_group_id:
+                    if current_group_id == message.media_group_id:
+                        current_group_msgs.append(message)
+                    else:
+                        if current_group_msgs:
+                            sent = await send_album(
+                                user, client, current_group_msgs, m, sts, protect,
+                                caption, link_remove, replace_link, button,
+                                datas, user_have_db, dup_files, user_db if user_have_db else None
+                            )
+                            sts.add('total_files', sent)
+                            await asyncio.sleep(sleep)
+                        current_group_id = message.media_group_id
+                        current_group_msgs = [message]
+                    continue
                 else:
-                   new_caption = modify_caption(message, caption, link_remove, replace_link)
-                   details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
-                   await copy(user, client, details, m, sts)
-                   sts.add('total_files')
-                   await asyncio.sleep(sleep) 
+                    # Flush pending album
+                    if current_group_msgs:
+                        sent = await send_album(
+                            user, client, current_group_msgs, m, sts, protect,
+                            caption, link_remove, replace_link, button,
+                            datas, user_have_db, dup_files, user_db if user_have_db else None
+                        )
+                        sts.add('total_files', sent)
+                        await asyncio.sleep(sleep)
+                        current_group_msgs = []
+                        current_group_id = None
+                    
+                    if use_batch:
+                       MSG.append(message.id)
+                       notcompleted = len(MSG)
+                       completed = sts.get('total') - sts.get('fetched')
+                       if ( notcompleted >= 100 
+                            or completed <= 100): 
+                          await forward(user, client, MSG, m, sts, protect)
+                          sts.add('total_files', notcompleted)
+                          await asyncio.sleep(10)
+                          MSG = []
+                    else:
+                       new_caption = modify_caption(message, caption, link_remove, replace_link)
+                       details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
+                       await copy(user, client, details, m, sts)
+                       sts.add('total_files')
+                       await asyncio.sleep(sleep) 
+          
+          # Flush any remaining album after loop
+          if current_group_msgs:
+              sent = await send_album(
+                  user, client, current_group_msgs, m, sts, protect,
+                  caption, link_remove, replace_link, button,
+                  datas, user_have_db, dup_files, user_db if user_have_db else None
+              )
+              sts.add('total_files', sent)
+          
         except Exception as e:
             await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
             if user_have_db:
