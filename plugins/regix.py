@@ -221,15 +221,14 @@ def modify_caption(message, caption, link_remove, replace_link):
     return base_caption
 
 
-# ============ ALBUM (MEDIA GROUP) SENDING HELPER WITH SLEEP MODE ============
+# ============ ALBUM (MEDIA GROUP) SENDING HELPER ============
 
 async def send_album(
     user, client, messages, m, sts, protect,
-    caption, link_remove, replace_link, button, datas, user_have_db, dup_files, user_db=None, sleep_seconds=35
+    caption, link_remove, replace_link, button, datas, user_have_db, dup_files, user_db=None
 ):
     """
     Send a list of messages as a Telegram media group (album).
-    Applies the same sleep mode as individual forwarding.
     Returns number of successfully sent media.
     """
     input_media = []
@@ -299,36 +298,31 @@ async def send_album(
     # Send in chunks of 10 (Telegram limit)
     for i in range(0, len(input_media), 10):
         chunk = input_media[i:i+10]
-        while True:
-            try:
-                await client.send_media_group(
+        try:
+            await client.send_media_group(
+                chat_id=sts.get('TO'),
+                media=chunk,
+                protect_content=protect
+            )
+        except FloodWait as e:
+            await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', e.value, sts)
+            await asyncio.sleep(e.value)
+            await client.send_media_group(
+                chat_id=sts.get('TO'),
+                media=chunk,
+                protect_content=protect
+            )
+        except Exception as e:
+            print(f"Album send error: {e}")
+            # Fallback: send individually
+            for media in chunk:
+                await client.send_cached_media(
                     chat_id=sts.get('TO'),
-                    media=chunk,
+                    file_id=media.media,
+                    caption=media.caption,
                     protect_content=protect
                 )
-                # ✅ Apply SAME sleep mode as individual forwarding
-                await asyncio.sleep(sleep_seconds)
-                break  # success, exit retry loop
-            except FloodWait as e:
-                wait_time = e.value
-                print(f"FloodWait {wait_time}s for album, sleeping...")
-                await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', wait_time, sts)
-                await asyncio.sleep(wait_time)
-                # retry
-            except Exception as e:
-                print(f"Album send error: {e}")
-                # Fallback: send individually
-                for media in chunk:
-                    await client.send_cached_media(
-                        chat_id=sts.get('TO'),
-                        file_id=media.media,
-                        caption=media.caption,
-                        protect_content=protect
-                    )
-                    await asyncio.sleep(1)
-                # ✅ Apply sleep mode even on fallback
-                await asyncio.sleep(sleep_seconds)
-                break  # exit retry loop after fallback
+                await asyncio.sleep(1)
 
     return sent_count
 
@@ -411,8 +405,6 @@ async def pub_(bot, message):
     default_delay = 1 if _bot['is_bot'] else 10
     user_delay = datas['forward_delay']
     sleep = user_delay if user_delay > 0 else default_delay
-    # Sleep mode is 35 seconds (this is the default sleep for individual messages)
-    SLEEP_MODE = 35
     await msg_edit(m, "<code>processing...</code>") 
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
@@ -450,7 +442,7 @@ async def pub_(bot, message):
                    sts.add('deleted')
                    continue
                 
-                # ============ APPLY EXACT KEYWORD FILTER ============
+                # ============ APPLY EXACT KEYWORD FILTER (Checks file name AND caption for all media types) ============
                 if await should_filter_by_keywords(keywords, message):
                     sts.add('filtered')
                     continue
@@ -502,10 +494,10 @@ async def pub_(bot, message):
                             sent = await send_album(
                                 user, client, current_group_msgs, m, sts, protect,
                                 caption, link_remove, replace_link, button,
-                                datas, user_have_db, dup_files, user_db if user_have_db else None,
-                                sleep_seconds=SLEEP_MODE  # Pass the 35-second sleep mode
+                                datas, user_have_db, dup_files, user_db if user_have_db else None
                             )
                             sts.add('total_files', sent)
+                            await asyncio.sleep(sleep)
                         # Start new group
                         current_group_id = message.media_group_id
                         current_group_msgs = [message]
@@ -518,10 +510,10 @@ async def pub_(bot, message):
                         sent = await send_album(
                             user, client, current_group_msgs, m, sts, protect,
                             caption, link_remove, replace_link, button,
-                            datas, user_have_db, dup_files, user_db if user_have_db else None,
-                            sleep_seconds=SLEEP_MODE  # Pass the 35-second sleep mode
+                            datas, user_have_db, dup_files, user_db if user_have_db else None
                         )
                         sts.add('total_files', sent)
+                        await asyncio.sleep(sleep)
                         current_group_msgs = []
                         current_group_id = None
                     
@@ -534,24 +526,21 @@ async def pub_(bot, message):
                             or completed <= 100): 
                           await forward(user, client, MSG, m, sts, protect)
                           sts.add('total_files', notcompleted)
-                          await asyncio.sleep(sleep)
-                          await asyncio.sleep(SLEEP_MODE)  # Apply 35-second sleep mode for batch forward
+                          await asyncio.sleep(10)
                           MSG = []
                     else:
                        new_caption = modify_caption(message, caption, link_remove, replace_link)
                        details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
                        await copy(user, client, details, m, sts)
                        sts.add('total_files')
-                       await asyncio.sleep(sleep)
-                       await asyncio.sleep(SLEEP_MODE)  # Apply 35-second sleep mode for individual forward
+                       await asyncio.sleep(sleep) 
           
           # After loop, flush any remaining album
           if current_group_msgs:
               sent = await send_album(
                   user, client, current_group_msgs, m, sts, protect,
                   caption, link_remove, replace_link, button,
-                  datas, user_have_db, dup_files, user_db if user_have_db else None,
-                  sleep_seconds=SLEEP_MODE  # Pass the 35-second sleep mode
+                  datas, user_have_db, dup_files, user_db if user_have_db else None
               )
               sts.add('total_files', sent)
           
@@ -932,7 +921,7 @@ async def restart_pending_forwads(bot, user):
     default_delay = 1 if _bot['is_bot'] else 10
     user_delay = datas['forward_delay']
     sleep = user_delay if user_delay > 0 else default_delay
-    SLEEP_MODE = 35
+    #await msg_edit(m, "<code>processing...</code>") 
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
     dup_files = []
@@ -1023,10 +1012,10 @@ async def restart_pending_forwads(bot, user):
                             sent = await send_album(
                                 user, client, current_group_msgs, m, sts, protect,
                                 caption, link_remove, replace_link, button,
-                                datas, user_have_db, dup_files, user_db if user_have_db else None,
-                                sleep_seconds=SLEEP_MODE
+                                datas, user_have_db, dup_files, user_db if user_have_db else None
                             )
                             sts.add('total_files', sent)
+                            await asyncio.sleep(sleep)
                         current_group_id = message.media_group_id
                         current_group_msgs = [message]
                     continue
@@ -1036,10 +1025,10 @@ async def restart_pending_forwads(bot, user):
                         sent = await send_album(
                             user, client, current_group_msgs, m, sts, protect,
                             caption, link_remove, replace_link, button,
-                            datas, user_have_db, dup_files, user_db if user_have_db else None,
-                            sleep_seconds=SLEEP_MODE
+                            datas, user_have_db, dup_files, user_db if user_have_db else None
                         )
                         sts.add('total_files', sent)
+                        await asyncio.sleep(sleep)
                         current_group_msgs = []
                         current_group_id = None
                     
@@ -1051,24 +1040,21 @@ async def restart_pending_forwads(bot, user):
                             or completed <= 100): 
                           await forward(user, client, MSG, m, sts, protect)
                           sts.add('total_files', notcompleted)
-                          await asyncio.sleep(sleep)
-                          await asyncio.sleep(SLEEP_MODE)
+                          await asyncio.sleep(10)
                           MSG = []
                     else:
                        new_caption = modify_caption(message, caption, link_remove, replace_link)
                        details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
                        await copy(user, client, details, m, sts)
                        sts.add('total_files')
-                       await asyncio.sleep(sleep)
-                       await asyncio.sleep(SLEEP_MODE)
+                       await asyncio.sleep(sleep) 
           
           # Flush any remaining album after loop
           if current_group_msgs:
               sent = await send_album(
                   user, client, current_group_msgs, m, sts, protect,
                   caption, link_remove, replace_link, button,
-                  datas, user_have_db, dup_files, user_db if user_have_db else None,
-                  sleep_seconds=SLEEP_MODE
+                  datas, user_have_db, dup_files, user_db if user_have_db else None
               )
               sts.add('total_files', sent)
           
