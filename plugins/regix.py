@@ -471,7 +471,19 @@ async def edit(user, msg, title, status, sts):
    i = sts.get(full=True)
    status = 'Forwarding' if status == 5 else f"sleeping {status} s" if str(status).isnumeric() else status
    percentage = "{:.0f}".format(float(i.fetched)*100/float(i.total))
-   text = TEXT.format(i.fetched, i.total_files, i.duplicate, i.deleted, i.skip, i.filtered, status, percentage, title)
+   
+   # Compute ETA (Estimated Time of Arrival)
+   now = time.time()
+   diff = int(now - i.start)
+   speed = sts.divide(i.fetched, diff) if diff > 0 else 0
+   remaining_ms = sts.divide(i.total - i.fetched, speed) * 1000 if speed > 0 else 0
+   eta = TimeFormatter(milliseconds=remaining_ms) if remaining_ms > 0 else "0 s"
+   
+   # If completed or cancelled, show 0 s
+   if status in ["cancelled", "completed"]:
+       eta = "0 s"
+   
+   text = TEXT.format(i.fetched, i.total_files, i.duplicate, i.deleted, i.skip, i.filtered, status, eta, percentage, title)
    await update_forward(user_id=user, last_id=None, start_time=i.start, limit=i.limit, chat_id=i.FROM, toid=i.TO, forward_id=None, msg_id=msg.id, fetched=i.fetched, deleted=i.deleted, total=i.total_files, duplicate=i.duplicate, skip=i.skip, filterd=i.filtered)
    now = time.time()
    diff = int(now - i.start)
