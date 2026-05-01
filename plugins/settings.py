@@ -47,13 +47,19 @@ async def settings_query(bot, query):
      _bot = await db.get_bot(user_id)
      usr_bot = await db.get_userbot(user_id)
      if _bot is not None:
-        buttons.append([InlineKeyboardButton(_bot['name'],
+        # Show bot status in button text
+        bot_status = _bot.get('enabled', True)
+        status_icon = "✅" if bot_status else "❌"
+        buttons.append([InlineKeyboardButton(f"{status_icon} {_bot['name']}",
                          callback_data=f"settings#editbot")])
      else:
         buttons.append([InlineKeyboardButton('✚ Add bot ✚', 
                          callback_data="settings#addbot")])
      if usr_bot is not None:
-        buttons.append([InlineKeyboardButton(usr_bot['name'],
+        # Show userbot status in button text
+        usr_status = usr_bot.get('enabled', True)
+        usr_status_icon = "✅" if usr_status else "❌"
+        buttons.append([InlineKeyboardButton(f"{usr_status_icon} {usr_bot['name']}",
                          callback_data=f"settings#edituserbot")])
      else:
         buttons.append([InlineKeyboardButton('✚ Add User bot ✚', 
@@ -116,22 +122,62 @@ async def settings_query(bot, query):
   elif type=="editbot": 
      bot = await db.get_bot(user_id)
      TEXT = Script.BOT_DETAILS if bot['is_bot'] else Script.USER_DETAILS
-     buttons = [[InlineKeyboardButton('❌ Remove ❌', callback_data=f"settings#removebot")
-               ],
-               [InlineKeyboardButton('back', callback_data="settings#bots")]]
+     
+     # Get bot status (enabled/disabled)
+     bot_status = bot.get('enabled', True)
+     status_text = "✅ ON" if bot_status else "❌ OFF"
+     
+     buttons = [[
+         InlineKeyboardButton(status_text, callback_data=f"settings#togglebot"),
+         InlineKeyboardButton('❌ Remove ❌', callback_data=f"settings#removebot")
+     ],[
+         InlineKeyboardButton('back', callback_data="settings#bots")
+     ]]
      await query.message.edit_text(
         TEXT.format(bot['name'], bot['id'], bot['username']),
         reply_markup=InlineKeyboardMarkup(buttons))
      
+  elif type=="togglebot":
+     bot = await db.get_bot(user_id)
+     if bot:
+         new_status = not bot.get('enabled', True)
+         await db.update_bot_status(user_id, new_status)
+         await query.answer(f"Bot {'Enabled' if new_status else 'Disabled'}", show_alert=True)
+         # Refresh the editbot view
+         query.data = "settings#editbot"
+         await settings_query(bot, query)
+     else:
+         await query.answer("Bot not found!", show_alert=True)
+     
   elif type=="edituserbot": 
      bot = await db.get_userbot(user_id)
      TEXT = Script.USER_DETAILS
-     buttons = [[InlineKeyboardButton('❌ Remove ❌', callback_data=f"settings#removeuserbot")
-               ],
-               [InlineKeyboardButton('back', callback_data="settings#bots")]]
+     
+     # Get userbot status (enabled/disabled)
+     bot_status = bot.get('enabled', True)
+     status_text = "✅ ON" if bot_status else "❌ OFF"
+     
+     buttons = [[
+         InlineKeyboardButton(status_text, callback_data=f"settings#toggleuserbot"),
+         InlineKeyboardButton('❌ Remove ❌', callback_data=f"settings#removeuserbot")
+     ],[
+         InlineKeyboardButton('back', callback_data="settings#bots")
+     ]]
      await query.message.edit_text(
         TEXT.format(bot['name'], bot['id'], bot['username']),
         reply_markup=InlineKeyboardMarkup(buttons))
+     
+  elif type=="toggleuserbot":
+     bot = await db.get_userbot(user_id)
+     if bot:
+         new_status = not bot.get('enabled', True)
+         await db.update_userbot_status(user_id, new_status)
+         await query.answer(f"Userbot {'Enabled' if new_status else 'Disabled'}", show_alert=True)
+         # Refresh the edituserbot view
+         query.data = "settings#edituserbot"
+         await settings_query(bot, query)
+     else:
+         await query.answer("Userbot not found!", show_alert=True)
      
   elif type=="removebot":
      await db.remove_bot(user_id)
