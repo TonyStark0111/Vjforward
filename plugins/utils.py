@@ -5,6 +5,7 @@
 import time as tm
 from database import Db, db
 from .test import parse_buttons
+from config import temp
 
 STATUS = {}
 
@@ -43,10 +44,18 @@ class STS:
        by = 1 if int(by) == 0 else by 
        return int(no) / by 
 
-    async def get_data(self, user_id):
-        bot = await db.get_bot(user_id)
-        if bot is None:
+    async def get_data(self, user_id, forward_id=None):
+        # Check if we have a pre-selected bot from auto-detection
+        bot = None
+        if forward_id and hasattr(temp, 'BOT_SELECTION') and forward_id in temp.BOT_SELECTION:
+            selection = temp.BOT_SELECTION[forward_id]
+            bot = selection['bot_data']
+        else:
+            # Original logic: try userbot first, then regular bot
             bot = await db.get_userbot(user_id)
+            if bot is None:
+                bot = await db.get_bot(user_id)
+        
         k, filters = self, await db.get_filters(user_id)
         size, configs = None, await db.get_configs(user_id)
         if configs['duplicate']:
