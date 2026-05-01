@@ -545,20 +545,47 @@ async def send(bot, user, text):
 # Ask Doubt on telegram @KingVJ01
 
 def custom_caption(msg, caption, strip_links=False):
+  """
+  Generate custom caption for messages.
+  Supports: Video, Document, Audio, Photo, Animation (GIF/MP4)
+  """
   if msg.media:
-    if (msg.video or msg.document or msg.audio or msg.photo):
-      media = getattr(msg, msg.media.value, None)
-      if media:
-        file_name = getattr(media, 'file_name', '')
-        file_size = getattr(media, 'file_size', '')
-        fcaption = getattr(msg, 'caption', '')
-        if fcaption:
-          fcaption = fcaption.html
-        if strip_links:
-          fcaption = strip_urls(fcaption)
-        if caption:
+    # Check all media types that can have captions with file info
+    if (msg.video or msg.document or msg.audio or msg.photo or msg.animation):
+      fcaption = getattr(msg, 'caption', '')
+      if fcaption:
+        fcaption = fcaption.html
+      if strip_links:
+        fcaption = strip_urls(fcaption)
+      
+      # Get file info based on media type
+      file_name = ""
+      file_size = 0
+      
+      if msg.animation:
+        # Handle GIF/MP4 animations
+        file_name = getattr(msg.animation, 'file_name', 'animation.gif')
+        file_size = getattr(msg.animation, 'file_size', 0)
+      elif msg.video:
+        file_name = getattr(msg.video, 'file_name', '')
+        file_size = getattr(msg.video, 'file_size', 0)
+      elif msg.document:
+        file_name = getattr(msg.document, 'file_name', '')
+        file_size = getattr(msg.document, 'file_size', 0)
+      elif msg.audio:
+        file_name = getattr(msg.audio, 'file_name', '')
+        file_size = getattr(msg.audio, 'file_size', 0)
+      elif msg.photo:
+        file_size = getattr(msg.photo, 'file_size', 0)
+        file_name = 'photo.jpg'
+      
+      if caption:
+        try:
           return caption.format(filename=file_name, size=get_size(file_size), caption=fcaption)
-        return fcaption
+        except KeyError as e:
+          # If formatting fails, return default caption
+          return fcaption
+      return fcaption
   return None
 
 # Don't Remove Credit Tg - @VJ_Botz
@@ -596,6 +623,7 @@ async def size_filter(max_size, min_size, file_size):
 # Ask Doubt on telegram @KingVJ01
 
 def media(msg):
+  """Extract file_id from any media type including animations (GIFs)"""
   if msg.media:
      media = getattr(msg, msg.media.value, None)
      if media:
