@@ -220,60 +220,6 @@ def modify_caption(message, caption, link_remove, replace_link):
 
     return base_caption
 
-# ============ UPDATED CUSTOM CAPTION FUNCTION WITH GIF/ANIMATION SUPPORT ============
-
-def custom_caption(msg, caption, strip_links=False):
-    """
-    Generate custom caption for messages including:
-    - Videos, Documents, Audio, Photos, Animations (GIFs/MP4 videos)
-    Supports: {filename}, {size}, {caption} placeholders
-    """
-    if msg.media:
-        # Check all media types including animation (GIFs/MP4 videos)
-        if (msg.video or msg.document or msg.audio or msg.photo or msg.animation):
-            media = getattr(msg, msg.media.value, None)
-            if media:
-                # Get filename (works for video, document, audio, animation)
-                file_name = getattr(media, 'file_name', '')
-                # For photos, file_name might not exist
-                if not file_name and msg.photo:
-                    file_name = f"photo_{msg.photo.file_unique_id}.jpg"
-                elif not file_name and msg.animation:
-                    file_name = getattr(media, 'file_name', f"gif_{msg.animation.file_unique_id}.mp4")
-                
-                # Get file size
-                file_size = getattr(media, 'file_size', 0)
-                
-                # Get original caption
-                fcaption = getattr(msg, 'caption', '')
-                if fcaption:
-                    fcaption = fcaption.html
-                else:
-                    fcaption = ''
-                
-                # Strip links if requested
-                if strip_links:
-                    fcaption = strip_urls(fcaption)
-                
-                # Apply custom caption if provided
-                if caption:
-                    try:
-                        return caption.format(
-                            filename=file_name, 
-                            size=get_size(file_size), 
-                            caption=fcaption if fcaption else ''
-                        )
-                    except KeyError as e:
-                        logger.error(f"Caption formatting error: {e}")
-                        return fcaption
-                    except Exception as e:
-                        logger.error(f"Unexpected caption error: {e}")
-                        return fcaption
-                
-                return fcaption
-    
-    return None
-
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @KingVJ01
@@ -293,10 +239,7 @@ async def pub_(bot, message):
     if i.TO in temp.IS_FRWD_CHAT:
       return await message.answer("In Target chat a task is progressing. please wait until task complete", show_alert=True)
     m = await msg_edit(message.message, "<code>verifying your data's, please wait.</code>")
-    
-    # ============ GET BOT WITH FORWARD_ID FOR AUTO-DETECTION ============
-    _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user, frwd_id)
-    
+    _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
     filter = datas['filters']
     max_size = datas['max_size']
     min_size = datas['min_size']
@@ -458,10 +401,6 @@ async def pub_(bot, message):
             await user_db.drop_all()
             await user_db.close()
         await stop(client, user)
-    
-    # Clean up temp selection after forwarding
-    if hasattr(temp, 'BOT_SELECTION') and frwd_id in temp.BOT_SELECTION:
-        del temp.BOT_SELECTION[frwd_id]
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -600,6 +539,27 @@ async def send(bot, user, text):
       await bot.send_message(user, text=text)
    except:
       pass 
+
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
+
+def custom_caption(msg, caption, strip_links=False):
+  if msg.media:
+    if (msg.video or msg.document or msg.audio or msg.photo):
+      media = getattr(msg, msg.media.value, None)
+      if media:
+        file_name = getattr(media, 'file_name', '')
+        file_size = getattr(media, 'file_size', '')
+        fcaption = getattr(msg, 'caption', '')
+        if fcaption:
+          fcaption = fcaption.html
+        if strip_links:
+          fcaption = strip_urls(fcaption)
+        if caption:
+          return caption.format(filename=file_name, size=get_size(file_size), caption=fcaption)
+        return fcaption
+  return None
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -749,7 +709,7 @@ async def restart_pending_forwads(bot, user):
        sts.add('deleted', value=settings['deleted'])
        sts.add('total_files', value=settings['total'])
        m = await bot.get_messages(user, settings['msg_id'])#
-       _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user, forward_id)
+       _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
        i = sts.get(full=True)
        filter = datas['filters']
        max_size = datas['max_size']
