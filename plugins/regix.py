@@ -239,7 +239,10 @@ async def pub_(bot, message):
     if i.TO in temp.IS_FRWD_CHAT:
       return await message.answer("In Target chat a task is progressing. please wait until task complete", show_alert=True)
     m = await msg_edit(message.message, "<code>verifying your data's, please wait.</code>")
-    _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
+    
+    # ============ GET BOT WITH FORWARD_ID FOR AUTO-DETECTION ============
+    _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user, frwd_id)
+    
     filter = datas['filters']
     max_size = datas['max_size']
     min_size = datas['min_size']
@@ -401,6 +404,10 @@ async def pub_(bot, message):
             await user_db.drop_all()
             await user_db.close()
         await stop(client, user)
+    
+    # Clean up temp selection after forwarding
+    if hasattr(temp, 'BOT_SELECTION') and frwd_id in temp.BOT_SELECTION:
+        del temp.BOT_SELECTION[frwd_id]
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -709,7 +716,7 @@ async def restart_pending_forwads(bot, user):
        sts.add('deleted', value=settings['deleted'])
        sts.add('total_files', value=settings['total'])
        m = await bot.get_messages(user, settings['msg_id'])#
-       _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
+       _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user, forward_id)
        i = sts.get(full=True)
        filter = datas['filters']
        max_size = datas['max_size']
