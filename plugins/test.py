@@ -81,137 +81,62 @@ class CLIENT:
 
   async def add_session(self, bot, message):
      user_id = int(message.from_user.id)
-     
-     # First ask if they want to use existing session string or phone number
-     ask = await bot.ask(
-         user_id, 
-         "<b>⚠️ ADD USERBOT ⚠️</b>\n\n"
-         "<b>Choose how you want to add your userbot:</b>\n"
-         "• Send <code>/session</code> if you have a pre-generated Pyrogram session string\n"
-         "• Send <code>/phone</code> to add using phone number (OTP login)\n\n"
-         "<b>Or send your session string directly (starts with AQ...)</b>\n\n"
-         "<code>/cancel</code> - cancel this process"
-     )
-     
-     if ask.text == '/cancel':
-         return await ask.reply('<b>process cancelled !</b>')
-     
-     text = ask.text.strip()
-     
-     # Check if user wants to use pre-existing session string
-     if text == '/session' or (len(text) > 300 and not text.startswith('+')):
-         # This is for session string input
-         if text == '/session':
-             # Ask for session string
-             session_msg = await bot.ask(
-                 user_id,
-                 "<b>Send your Pyrogram session string (starts with AQ...):</b>\n\n"
-                 "<b>Example:</b> <code>AQHLuR8AH8XFjUScebbEzR3_31AR4BlK8G_MAygMG8mblvMVzizUHuSvScStxZaFSHeienCntLtylOGsvZewy6jJ0ymj2I5ltj4I5qtPDKRqa0BGFeCh8HWVJG-v4drBwbQLX5lF-nRt40JZixMSyeEUINiVGcuPDujP52orVyHfI1e_JxobxEDwDy0FjnO1ns1sWrkn2st2eVh-am3CCAtW19pN5XRBWX74EAd9B9y6yl0fRySAvVTdycTHgOgbDZm8ILI0Cqp0DDVQh4SL4QeUBnGjG0DimF8d2DzHzM6y9erSkqO0V1fof0JU5CAX0t7QXNGvXwCJv7wif7vKMFV1jl-bPwAAAAHynqh-AA</code>\n\n"
-                 "<code>/cancel</code> - cancel"
-             )
-             if session_msg.text == '/cancel':
-                 return await session_msg.reply('<b>process cancelled !</b>')
-             session_string = session_msg.text.strip()
-         else:
-             session_string = text
-         
-         # Validate session string length
-         if len(session_string) < SESSION_STRING_SIZE:
-             return await ask.reply(f'<b>Invalid session string! Length should be {SESSION_STRING_SIZE}+ characters.</b>')
-         
-         # Test the session string
-         try:
-             await ask.reply("<code>Testing session string...</code>")
-             _client = Client("USERBOT", self.api_id, self.api_hash, session_string=session_string, in_memory=True)
-             client = await _client.start()
-         except Exception as e:
-             return await ask.reply(f"<b>Invalid session string!</b>\n\n<code>{e}</code>")
-         
-         user = _client.me
-         details = {
-           'id': user.id,
-           'is_bot': False,
-           'user_id': user_id,
-           'name': user.first_name,
-           'session': session_string,
-           'username': user.username
-         }
-         await db.add_userbot(details)
-         await ask.reply(f"<b>✅ Userbot successfully added!</b>\n\n<b>Name:</b> {user.first_name}\n<b>Username:</b> @{user.username}\n<b>ID:</b> <code>{user.id}</code>")
-         return True
-     
-     elif text == '/phone' or text.startswith('+'):
-         # Phone number flow
-         phone_number = text if text.startswith('+') else None
-         
-         if not phone_number:
-             # Ask for phone number
-             phone_number_msg = await bot.ask(
-                 chat_id=user_id, 
-                 text="<b>Please send your phone number which includes country code</b>\n<b>Example:</b> <code>+13124562345</code>\n\n<code>/cancel</code> - cancel"
-             )
-             if phone_number_msg.text == '/cancel':
-                 return await phone_number_msg.reply('<b>process cancelled !</b>')
-             phone_number = phone_number_msg.text
-         
-         # Show disclaimer
-         text = "<b>⚠️ DISCLAIMER ⚠️</b>\n\n<code>you can use your session for forward message from private chat to another chat.\nPlease add your pyrogram session with your own risk. Their is a chance to ban your account. My developer is not responsible if your account may get banned.</code>"
-         await bot.send_message(user_id, text=text)
-         
-         client = Client(":memory:", Config.API_ID, Config.API_HASH)
-         await client.connect()
-         await ask.reply("Sending OTP...")
-         try:
-            code = await client.send_code(phone_number)
-            phone_code_msg = await bot.ask(user_id, "Please check for an OTP in official telegram account. If you got it, send OTP here after reading the below format. \n\nIf OTP is `12345`, **please send it as** `1 2 3 4 5`.\n\n**Enter /cancel to cancel The Procces**", filters=filters.text, timeout=600)
-         except PhoneNumberInvalid:
-            await ask.reply('`PHONE_NUMBER` **is invalid.**')
-            return
-         if phone_code_msg.text=='/cancel':
-            return await phone_code_msg.reply('<b>process cancelled !</b>')
-         try:
-            phone_code = phone_code_msg.text.replace(" ", "")
-            await client.sign_in(phone_number, code.phone_code_hash, phone_code)
-         except PhoneCodeInvalid:
-            await phone_code_msg.reply('**OTP is invalid.**')
-            return
-         except PhoneCodeExpired:
-            await phone_code_msg.reply('**OTP is expired.**')
-            return
-         except SessionPasswordNeeded:
-            two_step_msg = await bot.ask(user_id, '**Your account has enabled two-step verification. Please provide the password.\n\nEnter /cancel to cancel The Procces**', filters=filters.text, timeout=300)
-            if two_step_msg.text=='/cancel':
-                return await two_step_msg.reply('<b>process cancelled !</b>')
-            try:
-               password = two_step_msg.text
-               await client.check_password(password=password)
-            except PasswordHashInvalid:
-               await two_step_msg.reply('**Invalid Password Provided**')
-               return
-         string_session = await client.export_session_string()
-         await client.disconnect()
-         if len(string_session) < SESSION_STRING_SIZE:
-            return await ask.reply('<b>invalid session string</b>')
-         try:
-           _client = Client("USERBOT", self.api_id, self.api_hash, session_string=string_session, in_memory=True)
-           client = await _client.start()
-         except Exception as e:
-           return await ask.reply_text(f"<b>USER BOT ERROR:</b> <code>{e}</code>")
-         user = _client.me
-         details = {
-           'id': user.id,
-           'is_bot': False,
-           'user_id': user_id,
-           'name': user.first_name,
-           'session': string_session,
-           'username': user.username
-         }
-         await db.add_userbot(details)
-         await ask.reply(f"<b>✅ Userbot successfully added!</b>\n\n<b>Name:</b> {user.first_name}\n<b>Username:</b> @{user.username}\n<b>ID:</b> <code>{user.id}</code>")
-         return True
-     
-     else:
-         return await ask.reply("<b>Invalid option! Please use /session or /phone</b>")
+     text = "<b>⚠️ DISCLAIMER ⚠️</b>\n\n<code>you can use your session for forward message from private chat to another chat.\nPlease add your pyrogram session with your own risk. Their is a chance to ban your account. My developer is not responsible if your account may get banned.</code>"
+     await bot.send_message(user_id, text=text)
+     phone_number_msg = await bot.ask(chat_id=user_id, text="<b>Please send your phone number which includes country code</b>\n<b>Example:</b> <code>+13124562345</code>")
+     if phone_number_msg.text=='/cancel':
+        return await phone_number_msg.reply('<b>process cancelled !</b>')
+     phone_number = phone_number_msg.text
+     client = Client(":memory:", Config.API_ID, Config.API_HASH)
+     await client.connect()
+     await phone_number_msg.reply("Sending OTP...")
+     try:
+        code = await client.send_code(phone_number)
+        phone_code_msg = await bot.ask(user_id, "Please check for an OTP in official telegram account. If you got it, send OTP here after reading the below format. \n\nIf OTP is `12345`, **please send it as** `1 2 3 4 5`.\n\n**Enter /cancel to cancel The Procces**", filters=filters.text, timeout=600)
+     except PhoneNumberInvalid:
+        await phone_number_msg.reply('`PHONE_NUMBER` **is invalid.**')
+        return
+     if phone_code_msg.text=='/cancel':
+        return await phone_code_msg.reply('<b>process cancelled !</b>')
+     try:
+        phone_code = phone_code_msg.text.replace(" ", "")
+        await client.sign_in(phone_number, code.phone_code_hash, phone_code)
+     except PhoneCodeInvalid:
+        await phone_code_msg.reply('**OTP is invalid.**')
+        return
+     except PhoneCodeExpired:
+        await phone_code_msg.reply('**OTP is expired.**')
+        return
+     except SessionPasswordNeeded:
+        two_step_msg = await bot.ask(user_id, '**Your account has enabled two-step verification. Please provide the password.\n\nEnter /cancel to cancel The Procces**', filters=filters.text, timeout=300)
+        if two_step_msg.text=='/cancel':
+            return await two_step_msg.reply('<b>process cancelled !</b>')
+        try:
+           password = two_step_msg.text
+           await client.check_password(password=password)
+        except PasswordHashInvalid:
+           await two_step_msg.reply('**Invalid Password Provided**')
+           return
+     string_session = await client.export_session_string()
+     await client.disconnect()
+     if len(string_session) < SESSION_STRING_SIZE:
+        return await msg.reply('<b>invalid session sring</b>')
+     try:
+       _client = Client("USERBOT", self.api_id, self.api_hash, session_string=string_session)
+       client = await _client.start()
+     except Exception as e:
+       return await msg.reply_text(f"<b>USER BOT ERROR:</b> `{e}`")
+     user = _client.me
+     details = {
+       'id': user.id,
+       'is_bot': False,
+       'user_id': user_id,
+       'name': user.first_name,
+       'session': string_session,
+       'username': user.username
+     }
+     await db.add_userbot(details)
+     return True
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -307,7 +232,7 @@ async def get_client(bot_token, is_bot=True):
   if is_bot:
     return Client("BOT", Config.API_ID, Config.API_HASH, bot_token=bot_token, in_memory=True)
   else:
-    return Client("USERBOT", Config.API_ID, Config.API_HASH, session_string=bot_token, in_memory=True)
+    return Client("USERBOT", Config.API_ID, Config.API_HASH, session_string=bot_token)
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
