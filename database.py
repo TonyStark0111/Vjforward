@@ -128,11 +128,16 @@ class Db:
 
     async def get_bot(self, user_id: int):
        bot = await self.bot.find_one({'user_id': user_id})
+       if bot and 'enabled' not in bot:
+           bot['enabled'] = True
        return bot if bot else None
 
     async def is_bot_exist(self, user_id):
        bot = await self.bot.find_one({'user_id': user_id})
        return bool(bot)
+    
+    async def update_bot_status(self, user_id, status):
+       await self.bot.update_one({'user_id': int(user_id)}, {'$set': {'enabled': status}})
    
     async def add_userbot(self, datas):
        if not await self.is_userbot_exist(datas['user_id']):
@@ -143,11 +148,16 @@ class Db:
 
     async def get_userbot(self, user_id: int):
        bot = await self.userbot.find_one({'user_id': user_id})
+       if bot and 'enabled' not in bot:
+           bot['enabled'] = True
        return bot if bot else None
 
     async def is_userbot_exist(self, user_id):
        bot = await self.userbot.find_one({'user_id': user_id})
        return bool(bot)
+    
+    async def update_userbot_status(self, user_id, status):
+       await self.userbot.update_one({'user_id': int(user_id)}, {'$set': {'enabled': status}})
     
     async def in_channel(self, user_id: int, chat_id: int) -> bool:
        channel = await self.chl.find_one({"user_id": int(user_id), "chat_id": int(chat_id)})
