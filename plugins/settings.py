@@ -601,6 +601,30 @@ async def settings_query(bot, query):
     markup = await extra_buttons(user_id)
     await msg.reply("Extra settings:", reply_markup=markup)
 
+  # ============ TURBO MODE HANDLERS ============
+  elif type == "toggle_turbo":
+    config = await get_configs(user_id)
+    current = config.get('turbo_mode', False)
+    new_status = not current
+    await update_configs(user_id, 'turbo_mode', new_status)
+    
+    warning = "⚠️ HIGH RISK! Account may get banned!" if new_status else ""
+    await query.answer(f"Turbo Mode {'ON' if new_status else 'OFF'}\n{warning}", show_alert=True)
+    
+    # Refresh the extra settings menu
+    markup = await extra_buttons(user_id)
+    await query.message.edit_reply_markup(markup)
+
+  elif type == "turbo_alert":
+    await query.answer(
+        "🚀 TURBO MODE:\n\n"
+        "When ON, userbot will forward at BOT SPEED (1s delay)\n\n"
+        "⚠️ WARNING: High risk of Telegram ban!\n"
+        "Use at your own risk.\n\n"
+        "Toggle using the ✅/❌ button.",
+        show_alert=True
+    )
+
   elif type.startswith("alert"):
     alert = type.split('_')[1]
     await query.answer(alert, show_alert=True)
@@ -615,6 +639,7 @@ async def extra_buttons(user_id):
     link_remove = config.get('link_remove', False)
     forward_delay = config.get('forward_delay', 0)
     replace_link = config.get('replace_link', None)
+    turbo_mode = config.get('turbo_mode', False)  # <-- ADDED
     
     delay_text = str(forward_delay) if forward_delay > 0 else 'Default'
     replace_text = 'Set' if not replace_link else 'Change'
@@ -645,6 +670,12 @@ async def extra_buttons(user_id):
                     callback_data=f'settings#replace_link'),
         InlineKeyboardButton(replace_text,
                     callback_data=f'settings#set_replace_link')
+        ],[
+        # ============ TURBO MODE BUTTON ============
+        InlineKeyboardButton('🚀 Turbo Mode',
+                    callback_data=f'settings#turbo_alert'),
+        InlineKeyboardButton('✅' if turbo_mode else '❌',
+                    callback_data=f'settings#toggle_turbo')
         ],[
         InlineKeyboardButton('⫷ Bᴀᴄᴋ',
                     callback_data=f'settings#main')
