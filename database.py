@@ -96,7 +96,7 @@ class Db:
             'db_uri': None,
             'link_remove': False,
             'replace_link': None,
-            'turbo_mode': False,  # NEW: Turbo mode for userbot
+            'turbo_mode': False,  # Turbo mode for userbot
             'filters': {
                'poll': True,
                'text': True,
