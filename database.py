@@ -82,7 +82,7 @@ class Db:
         await self.col.update_one({'id': int(id)}, {'$set': {'configs': configs}})
 
     async def get_configs(self, id):
-        # Default configuration with all required fields (forward_delay removed)
+        # Default configuration with turbo_mode added
         default = {
             'caption': None,
             'duplicate': True,
@@ -96,6 +96,7 @@ class Db:
             'db_uri': None,
             'link_remove': False,
             'replace_link': None,
+            'turbo_mode': False,  # NEW: Turbo mode for userbot
             'filters': {
                'poll': True,
                'text': True,
