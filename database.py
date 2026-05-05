@@ -97,7 +97,7 @@ class Db:
             'link_remove': False,
             'forward_delay': 0,
             'replace_link': None,
-            'turbo_mode': False,  # <-- ADDED FOR TURBO MODE
+            'turbo_mode': False,  # <-- TURBO MODE ADDED HERE
             'filters': {
                'poll': True,
                'text': True,
