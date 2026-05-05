@@ -82,7 +82,7 @@ class Db:
         await self.col.update_one({'id': int(id)}, {'$set': {'configs': configs}})
 
     async def get_configs(self, id):
-        # Default configuration with all required fields
+        # Default configuration with all required fields (forward_delay removed)
         default = {
             'caption': None,
             'duplicate': True,
@@ -95,9 +95,7 @@ class Db:
             'button': None,
             'db_uri': None,
             'link_remove': False,
-            'forward_delay': 0,
             'replace_link': None,
-            'turbo_mode': False,  # <-- TURBO MODE ADDED HERE
             'filters': {
                'poll': True,
                'text': True,
@@ -171,7 +169,7 @@ class Db:
        return await self.chl.insert_one({"user_id": user_id, "chat_id": chat_id, "title": title, "username": username})
 
     async def remove_channel(self, user_id: int, chat_id: int):
-       channel = await self.in_channel(user_id, chat_id )
+       channel = await self.in_channel(user_id, chat_id)
        if not channel:
          return False
        return await self.chl.delete_many({"user_id": int(user_id), "chat_id": int(chat_id)})
