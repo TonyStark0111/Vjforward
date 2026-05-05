@@ -295,23 +295,8 @@ async def pub_(bot, message):
     await db.add_frwd(user)
     await send(client, user, "<b>Fᴏʀᴡᴀʀᴅɪɴɢ sᴛᴀʀᴛᴇᴅ🔥</b>")
     sts.add(time=True)
-    
-    # ============ TURBO MODE IMPLEMENTATION ============
-    default_delay = 1 if _bot['is_bot'] else 10
-    user_delay = datas['forward_delay']
-    turbo_mode = datas.get('turbo_mode', False)
-
-    if _bot['is_bot']:
-        sleep = user_delay if user_delay > 0 else default_delay
-    else:
-        # Userbot
-        if turbo_mode:
-            # Turbo mode: use 1 second (bot speed) - user_delay ignored when <=0, else min(user_delay,1)
-            sleep = 1 if user_delay <= 0 else min(user_delay, 1)
-        else:
-            sleep = user_delay if user_delay > 0 else default_delay
-    # ============ END TURBO MODE IMPLEMENTATION ============
-    
+    # Fixed delay: 1 second for bot, 10 seconds for userbot
+    sleep = 1 if _bot['is_bot'] else 10
     await msg_edit(m, "<code>processing...</code>") 
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
@@ -814,23 +799,8 @@ async def restart_pending_forwads(bot, user):
     except KeyError:
         start = None
     sts.add(time=True, start_time=start)
-    
-    # ============ TURBO MODE IMPLEMENTATION (RESTART) ============
-    default_delay = 1 if _bot['is_bot'] else 10
-    user_delay = datas['forward_delay']
-    turbo_mode = datas.get('turbo_mode', False)
-
-    if _bot['is_bot']:
-        sleep = user_delay if user_delay > 0 else default_delay
-    else:
-        # Userbot
-        if turbo_mode:
-            # Turbo mode: use 1 second (bot speed) - user_delay ignored when <=0, else min(user_delay,1)
-            sleep = 1 if user_delay <= 0 else min(user_delay, 1)
-        else:
-            sleep = user_delay if user_delay > 0 else default_delay
-    # ============ END TURBO MODE IMPLEMENTATION ============
-    
+    # Fixed delay: 1 second for bot, 10 seconds for userbot
+    sleep = 1 if _bot['is_bot'] else 10
     #await msg_edit(m, "<code>processing...</code>") 
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
