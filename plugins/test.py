@@ -228,7 +228,8 @@ async def get_configs(user_id):
 
 async def update_configs(user_id, key, value):
   current = await db.get_configs(user_id)
-  if key in ['caption', 'duplicate', 'db_uri', 'forward_tag', 'protect', 'min_size', 'max_size', 'extension', 'keywords', 'button', 'link_remove', 'forward_delay', 'replace_link']:
+  # Added 'turbo_mode' to the allowed keys list
+  if key in ['caption', 'duplicate', 'db_uri', 'forward_tag', 'protect', 'min_size', 'max_size', 'extension', 'keywords', 'button', 'link_remove', 'forward_delay', 'replace_link', 'turbo_mode']:
      current[key] = value
   else: 
      current['filters'][key] = value
