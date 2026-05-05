@@ -295,8 +295,16 @@ async def pub_(bot, message):
     await db.add_frwd(user)
     await send(client, user, "<b>Fᴏʀᴡᴀʀᴅɪɴɢ sᴛᴀʀᴛᴇᴅ🔥</b>")
     sts.add(time=True)
-    # Fixed delay: 1 second for bot, 10 seconds for userbot
-    sleep = 1 if _bot['is_bot'] else 10
+    
+    # ============ TURBO MODE: Determine delay based on bot type and turbo mode ============
+    configs_full = await db.get_configs(user)
+    turbo_mode = configs_full.get('turbo_mode', False)
+    if _bot['is_bot']:
+        sleep = 1
+    else:
+        # Userbot: 1 sec if turbo mode enabled, else 10 sec
+        sleep = 1 if turbo_mode else 10
+    
     await msg_edit(m, "<code>processing...</code>") 
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
@@ -377,7 +385,9 @@ async def pub_(bot, message):
                         or completed <= 100): 
                       await forward(user, client, MSG, m, sts, protect)
                       sts.add('total_files', notcompleted)
-                      await asyncio.sleep(10)
+                      # Batch sleep: 1 sec if userbot with turbo mode, else 10 sec
+                      batch_sleep = 1 if (not _bot['is_bot'] and turbo_mode) else 10
+                      await asyncio.sleep(batch_sleep)
                       MSG = []
                 else:
                    new_caption = modify_caption(message, caption, link_remove, replace_link)
@@ -799,9 +809,16 @@ async def restart_pending_forwads(bot, user):
     except KeyError:
         start = None
     sts.add(time=True, start_time=start)
-    # Fixed delay: 1 second for bot, 10 seconds for userbot
-    sleep = 1 if _bot['is_bot'] else 10
-    #await msg_edit(m, "<code>processing...</code>") 
+    
+    # ============ TURBO MODE: Determine delay based on bot type and turbo mode ============
+    configs_full = await db.get_configs(user)
+    turbo_mode = configs_full.get('turbo_mode', False)
+    if _bot['is_bot']:
+        sleep = 1
+    else:
+        # Userbot: 1 sec if turbo mode enabled, else 10 sec
+        sleep = 1 if turbo_mode else 10
+    
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
     dup_files = []
@@ -885,7 +902,9 @@ async def restart_pending_forwads(bot, user):
                         or completed <= 100): 
                       await forward(user, client, MSG, m, sts, protect)
                       sts.add('total_files', notcompleted)
-                      await asyncio.sleep(10)
+                      # Batch sleep: 1 sec if userbot with turbo mode, else 10 sec
+                      batch_sleep = 1 if (not _bot['is_bot'] and turbo_mode) else 10
+                      await asyncio.sleep(batch_sleep)
                       MSG = []
                 else:
                    new_caption = modify_caption(message, caption, link_remove, replace_link)
