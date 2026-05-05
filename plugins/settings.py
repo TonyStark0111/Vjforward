@@ -580,6 +580,16 @@ async def settings_query(bot, query):
     markup = await extra_buttons(user_id)
     await msg.reply("Extra settings:", reply_markup=markup)
 
+  # NEW: Turbo Mode toggle
+  elif type == "toggle_turbo":
+    config = await get_configs(user_id)
+    current = config.get('turbo_mode', False)
+    await update_configs(user_id, 'turbo_mode', not current)
+    await query.answer(f"⚡ Turbo Mode {'Enabled' if not current else 'Disabled'}", show_alert=True)
+    # Refresh extra settings menu
+    markup = await extra_buttons(user_id)
+    await query.message.edit_reply_markup(markup)
+
   elif type.startswith("alert"):
     alert = type.split('_')[1]
     await query.answer(alert, show_alert=True)
@@ -593,6 +603,7 @@ async def extra_buttons(user_id):
     # Safely get values with defaults if keys don't exist
     link_remove = config.get('link_remove', False)
     replace_link = config.get('replace_link', None)
+    turbo_mode = config.get('turbo_mode', False)  # NEW: Get turbo mode status
     
     replace_text = 'Set' if not replace_link else 'Change'
     
@@ -617,6 +628,11 @@ async def extra_buttons(user_id):
                     callback_data=f'settings#replace_link'),
         InlineKeyboardButton(replace_text,
                     callback_data=f'settings#set_replace_link')
+        ],[
+        InlineKeyboardButton('⚡ Turbo Mode',  # NEW: Turbo mode button
+                    callback_data=f'settings#turbo_mode'),
+        InlineKeyboardButton('✅' if turbo_mode else '❌',
+                    callback_data=f'settings#toggle_turbo')
         ],[
         InlineKeyboardButton('⫷ Bᴀᴄᴋ',
                     callback_data=f'settings#main')
