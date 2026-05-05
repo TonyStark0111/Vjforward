@@ -545,27 +545,6 @@ async def settings_query(bot, query):
     markup = await extra_buttons(user_id)
     await query.message.edit_reply_markup(markup)
 
-  elif type == "set_forward_delay":
-    await query.message.delete()
-    msg = await bot.ask(
-        user_id,
-        "**Send the delay in seconds between forwarded messages.**\n\n"
-        "`0` = use default (1s for bot, 10s for userbot)\n"
-        "**/cancel** - cancel this process"
-    )
-    if msg.text == "/cancel":
-        return await msg.reply("Cancelled.")
-    try:
-        delay = int(msg.text)
-        if delay < 0:
-            return await msg.reply("Delay cannot be negative.")
-    except ValueError:
-        return await msg.reply("Invalid number. Please send a valid integer.")
-    await update_configs(user_id, 'forward_delay', delay)
-    await msg.reply(f"Forward delay set to {delay} seconds.")
-    markup = await extra_buttons(user_id)
-    await msg.reply("Extra settings:", reply_markup=markup)
-
   elif type == "set_replace_link":
     await query.message.delete()
     msg = await bot.ask(
@@ -601,15 +580,6 @@ async def settings_query(bot, query):
     markup = await extra_buttons(user_id)
     await msg.reply("Extra settings:", reply_markup=markup)
 
-  # ============ TURBO MODE TOGGLE ============
-  elif type == "toggle_turbo_mode":
-    config = await get_configs(user_id)
-    current = config.get('turbo_mode', False)
-    await update_configs(user_id, 'turbo_mode', not current)
-    await query.answer(f"Turbo Mode {'Enabled' if not current else 'Disabled'}", show_alert=True)
-    markup = await extra_buttons(user_id)
-    await query.message.edit_reply_markup(markup)
-
   elif type.startswith("alert"):
     alert = type.split('_')[1]
     await query.answer(alert, show_alert=True)
@@ -622,11 +592,8 @@ async def extra_buttons(user_id):
     config = await get_configs(user_id)
     # Safely get values with defaults if keys don't exist
     link_remove = config.get('link_remove', False)
-    forward_delay = config.get('forward_delay', 0)
     replace_link = config.get('replace_link', None)
-    turbo_mode = config.get('turbo_mode', False)  # <-- TURBO MODE
     
-    delay_text = str(forward_delay) if forward_delay > 0 else 'Default'
     replace_text = 'Set' if not replace_link else 'Change'
     
     buttons = [[
@@ -646,21 +613,10 @@ async def extra_buttons(user_id):
         InlineKeyboardButton('✅' if link_remove else '❌',
                     callback_data=f'settings#toggle_link_remove')
         ],[
-        InlineKeyboardButton('⏱ Forward Delay',
-                    callback_data=f'settings#forward_delay'),
-        InlineKeyboardButton(delay_text,
-                    callback_data=f'settings#set_forward_delay')
-        ],[
         InlineKeyboardButton('🔄 Replacement Link',
                     callback_data=f'settings#replace_link'),
         InlineKeyboardButton(replace_text,
                     callback_data=f'settings#set_replace_link')
-        ],[
-        # ============ TURBO MODE ROW ============
-        InlineKeyboardButton('⚡ Turbo Mode (Userbot)',
-                    callback_data=f'settings#turbo_mode'),
-        InlineKeyboardButton('✅' if turbo_mode else '❌',
-                    callback_data=f'settings#toggle_turbo_mode')
         ],[
         InlineKeyboardButton('⫷ Bᴀᴄᴋ',
                     callback_data=f'settings#main')
