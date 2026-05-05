@@ -1,4 +1,4 @@
-# VJ Forward Bot
+# VJ Forward Bot v3
 
 ![Typing SVG](https://readme-typing-svg.herokuapp.com/?lines=Welcome+To+VJ+Forward+Bot+!)
 
