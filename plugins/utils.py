@@ -8,10 +8,6 @@ from .test import parse_buttons
 
 STATUS = {}
 
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
-
 class STS:
     def __init__(self, id):
         self.id = id
@@ -60,13 +56,10 @@ class STS:
            min = 0
            max = 0
         button = parse_buttons(configs['button'] if configs['button'] else '')
-        # 🚀 Added turbo_count and turbo_sleep to the returned dict
         return bot, configs['caption'], configs['forward_tag'], {'filters': filters,
                 'keywords': configs['keywords'], 'min_size': min, 'max_size': max, 'extensions': configs['extension'], 
                 'skip_duplicate': duplicate, 'db_uri': configs['db_uri'], 'link_remove': configs['link_remove'],
-                'forward_delay': configs['forward_delay'], 'replace_link': configs['replace_link'],
-                'turbo_count': configs.get('turbo_count', 0), 'turbo_sleep': configs.get('turbo_sleep', 0)}, configs['protect'], button
-
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+                'forward_delay': configs.get('forward_delay', 0),
+                'replace_link': configs.get('replace_link', None),
+                'turbo_count': configs.get('turbo_count', 20),
+                'turbo_sleep': configs.get('turbo_sleep', 30)}, configs['protect'], button
