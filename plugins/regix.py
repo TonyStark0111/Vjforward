@@ -220,6 +220,40 @@ def modify_caption(message, caption, link_remove, replace_link):
 
     return base_caption
 
+
+# ============ 🚀 TURBO SLEEP HELPER FUNCTION ============
+
+async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None):
+    """Sleep for sleep_seconds while updating the status message every second."""
+    if sleep_seconds <= 0:
+        return
+    remaining = sleep_seconds
+    while remaining > 0:
+        # Check for cancellation
+        if temp.CANCEL.get(user, False):
+            return
+        # Build current progress text with sleeping status
+        i = sts.get(full=True)
+        if i.total > 0:
+            percentage = "{:.0f}".format(float(i.fetched) * 100 / float(i.total))
+        else:
+            percentage = "0"
+        status_text = f"sleeping {remaining} s"
+        # Use same format as edit() but without updating database
+        text = TEXT.format(i.fetched, i.total_files, i.duplicate, i.deleted,
+                           i.skip, i.filtered, status_text, "0 s", percentage, "ᴘʀᴏɢʀᴇssɪɴɢ")
+        progress = "●{0}{1}".format(
+            ''.join(["●" for _ in range(math.floor(int(percentage) / 4))]),
+            ''.join(["○" for _ in range(24 - math.floor(int(percentage) / 4))]))
+        button = [[InlineKeyboardButton(progress, f'fwrdstatus#sleep#{remaining}#{percentage}#{sts.id}')]]
+        button.append([InlineKeyboardButton('• ᴄᴀɴᴄᴇʟ', 'terminate_frwd')])
+        await msg_edit(m, text, InlineKeyboardMarkup(button))
+        await asyncio.sleep(1)
+        remaining -= 1
+    # After sleep, refresh status to show "Forwarding"
+    await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+
+
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @KingVJ01
@@ -295,19 +329,17 @@ async def pub_(bot, message):
     await db.add_frwd(user)
     await send(client, user, "<b>Fᴏʀᴡᴀʀᴅɪɴɢ sᴛᴀʀᴛᴇᴅ🔥</b>")
     sts.add(time=True)
-    
-    # ============ TURBO MODE: Determine delay based on bot type and turbo mode ============
-    configs_full = await db.get_configs(user)
-    turbo_mode = configs_full.get('turbo_mode', False)
-    if _bot['is_bot']:
-        sleep = 1
-    else:
-        # Userbot: 1 sec if turbo mode enabled, else 10 sec
-        sleep = 1 if turbo_mode else 10
-    
+    # Fixed delay: 1 second for bot, 10 seconds for userbot
+    sleep = 1 if _bot['is_bot'] else 10
     await msg_edit(m, "<code>processing...</code>") 
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
+    
+    # 🚀 Get turbo settings
+    turbo_count = datas.get('turbo_count', 0)
+    turbo_sleep = datas.get('turbo_sleep', 0)
+    turbo_counter = 0
+    
     dup_files = []
     if locked:
         try:
@@ -385,15 +417,29 @@ async def pub_(bot, message):
                         or completed <= 100): 
                       await forward(user, client, MSG, m, sts, protect)
                       sts.add('total_files', notcompleted)
-                      # Batch sleep: 1 sec if userbot with turbo mode, else 10 sec
-                      batch_sleep = 1 if (not _bot['is_bot'] and turbo_mode) else 10
-                      await asyncio.sleep(batch_sleep)
+                      
+                      # 🚀 Turbo sleep for batch forward
+                      if turbo_count > 0:
+                          turbo_counter += notcompleted
+                          if turbo_counter >= turbo_count:
+                              await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
+                              turbo_counter = 0
+                      
+                      await asyncio.sleep(10)
                       MSG = []
                 else:
                    new_caption = modify_caption(message, caption, link_remove, replace_link)
                    details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
                    await copy(user, client, details, m, sts)
                    sts.add('total_files')
+                   
+                   # 🚀 Turbo sleep for individual copy
+                   if turbo_count > 0:
+                       turbo_counter += 1
+                       if turbo_counter >= turbo_count:
+                           await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
+                           turbo_counter = 0
+                   
                    await asyncio.sleep(sleep) 
         except Exception as e:
             await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
@@ -479,7 +525,7 @@ async def msg_edit(msg, text, button=None, wait=None):
 async def edit(user, msg, title, status, sts):
    i = sts.get(full=True)
    status = 'Forwarding' if status == 5 else f"sleeping {status} s" if str(status).isnumeric() else status
-   percentage = "{:.0f}".format(float(i.fetched)*100/float(i.total))
+   percentage = "{:.0f}".format(float(i.fetched)*100/float(i.total)) if i.total > 0 else "0"
    
    # Compute ETA (Estimated Time of Arrival)
    now = time.time()
@@ -679,20 +725,36 @@ async def terminate_frwding(bot, m):
 
 @Client.on_callback_query(filters.regex(r'^fwrdstatus'))
 async def status_msg(bot, msg):
-    _, status, est_time, percentage, frwd_id = msg.data.split("#")
-    sts = STS(frwd_id)
-    if not sts.verify():
-       fetched, forwarded, remaining = 0
-    else:
-       fetched, limit, forwarded = sts.get('fetched'), sts.get('limit'), sts.get('total_files')
-       remaining = limit - fetched 
-    est_time = TimeFormatter(milliseconds=est_time)
-    start_time = sts.get('start')
-    uptime = await get_bot_uptime(start_time)
-    total = sts.get('limit') - sts.get('fetched')
-    time_to_comple = await complete_time(total)
-    est_time = est_time if (est_time != '' or status not in ['completed', 'cancelled']) else '0 s'
-    return await msg.answer(PROGRESS.format(percentage, fetched, forwarded, remaining, status, time_to_comple, uptime), show_alert=True)
+    try:
+        parts = msg.data.split("#")
+        if len(parts) < 5:
+            await msg.answer("Status unavailable", show_alert=True)
+            return
+        status = parts[1]
+        # Handle turbo sleep status clicks
+        if status == "sleep":
+            remaining = parts[2] if len(parts) > 2 else "?"
+            await msg.answer(f"🚀 Turbo sleep in progress... {remaining} seconds remaining", show_alert=True)
+            return
+        est_time = parts[2]
+        percentage = parts[3]
+        frwd_id = parts[4]
+        
+        sts = STS(frwd_id)
+        if not sts.verify():
+           fetched, forwarded, remaining = 0, 0, 0
+        else:
+           fetched, limit, forwarded = sts.get('fetched'), sts.get('limit'), sts.get('total_files')
+           remaining = limit - fetched 
+        est_time = TimeFormatter(milliseconds=est_time)
+        start_time = sts.get('start')
+        uptime = await get_bot_uptime(start_time)
+        total = sts.get('limit') - sts.get('fetched')
+        time_to_comple = await complete_time(total)
+        est_time = est_time if (est_time != '' or status not in ['completed', 'cancelled']) else '0 s'
+        await msg.answer(PROGRESS.format(percentage, fetched, forwarded, remaining, status, time_to_comple, uptime), show_alert=True)
+    except Exception as e:
+        await msg.answer(f"Status: Forwarding in progress", show_alert=True)
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -809,18 +871,17 @@ async def restart_pending_forwads(bot, user):
     except KeyError:
         start = None
     sts.add(time=True, start_time=start)
-    
-    # ============ TURBO MODE: Determine delay based on bot type and turbo mode ============
-    configs_full = await db.get_configs(user)
-    turbo_mode = configs_full.get('turbo_mode', False)
-    if _bot['is_bot']:
-        sleep = 1
-    else:
-        # Userbot: 1 sec if turbo mode enabled, else 10 sec
-        sleep = 1 if turbo_mode else 10
-    
+    # Fixed delay: 1 second for bot, 10 seconds for userbot
+    sleep = 1 if _bot['is_bot'] else 10
+    #await msg_edit(m, "<code>processing...</code>") 
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
+    
+    # 🚀 Get turbo settings for restart
+    turbo_count = datas.get('turbo_count', 0)
+    turbo_sleep = datas.get('turbo_sleep', 0)
+    turbo_counter = 0
+    
     dup_files = []
     if user_have_db and datas['skip_duplicate']:
         old_files = await user_db.get_all_files()
@@ -902,15 +963,29 @@ async def restart_pending_forwads(bot, user):
                         or completed <= 100): 
                       await forward(user, client, MSG, m, sts, protect)
                       sts.add('total_files', notcompleted)
-                      # Batch sleep: 1 sec if userbot with turbo mode, else 10 sec
-                      batch_sleep = 1 if (not _bot['is_bot'] and turbo_mode) else 10
-                      await asyncio.sleep(batch_sleep)
+                      
+                      # 🚀 Turbo sleep for batch forward (restart)
+                      if turbo_count > 0:
+                          turbo_counter += notcompleted
+                          if turbo_counter >= turbo_count:
+                              await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
+                              turbo_counter = 0
+                      
+                      await asyncio.sleep(10)
                       MSG = []
                 else:
                    new_caption = modify_caption(message, caption, link_remove, replace_link)
                    details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
                    await copy(user, client, details, m, sts)
                    sts.add('total_files')
+                   
+                   # 🚀 Turbo sleep for individual copy (restart)
+                   if turbo_count > 0:
+                       turbo_counter += 1
+                       if turbo_counter >= turbo_count:
+                           await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
+                           turbo_counter = 0
+                   
                    await asyncio.sleep(sleep) 
         except Exception as e:
             await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
@@ -974,7 +1049,7 @@ async def update_forward(user_id, chat_id, start_time, toid, last_id, limit, for
         'total': total,
         'duplicate': duplicate,
         'skip': skip,
-        'filtered':filterd
+        'filtered': filterd
     }
     await db.update_forward(user_id, details)
 
