@@ -580,15 +580,73 @@ async def settings_query(bot, query):
     markup = await extra_buttons(user_id)
     await msg.reply("Extra settings:", reply_markup=markup)
 
-  # NEW: Turbo Mode toggle
-  elif type == "toggle_turbo":
+  # ============ 🚀 TURBO MODE HANDLERS ============
+  elif type == "turbo_info":
     config = await get_configs(user_id)
-    current = config.get('turbo_mode', False)
-    await update_configs(user_id, 'turbo_mode', not current)
-    await query.answer(f"⚡ Turbo Mode {'Enabled' if not current else 'Disabled'}", show_alert=True)
-    # Refresh extra settings menu
+    count = config.get('turbo_count', 0)
+    sleep = config.get('turbo_sleep', 0)
+    info = f"**🚀 Turbo Mode**\n\n"
+    if count == 0:
+        info += "Currently **disabled**. Set a forward count to enable.\n\n"
+    else:
+        info += f"After **{count}** successful forwards, the bot will sleep for **{sleep}** seconds.\n\n"
+    info += "Use the buttons below to adjust."
+    markup = InlineKeyboardMarkup([[
+        InlineKeyboardButton('Back', callback_data='settings#extra')
+    ]])
+    await query.message.edit_text(info, reply_markup=markup)
+
+  elif type == "set_turbo_count":
+    await query.message.delete()
+    msg = await bot.ask(
+        user_id,
+        "**⚙️ Turbo Count**\n\n"
+        "After how many successful forwards should the bot take a break?\n"
+        "Send `0` to disable Turbo mode.\n\n"
+        "**Example:** `50`\n"
+        "Send /cancel to abort."
+    )
+    if msg.text == '/cancel':
+        return await msg.reply("Cancelled.")
+    try:
+        count = int(msg.text.strip())
+        if count < 0:
+            raise ValueError
+    except ValueError:
+        return await msg.reply("❌ Invalid number! Please send a positive integer or 0.")
+    await update_configs(user_id, 'turbo_count', count)
+    await msg.reply(f"✅ Turbo count set to {count}. {'Turbo disabled.' if count==0 else 'Will sleep after every '+str(count)+' forwards.'}")
+    # Refresh extra settings
     markup = await extra_buttons(user_id)
-    await query.message.edit_reply_markup(markup)
+    await msg.reply("Extra settings:", reply_markup=markup)
+
+  elif type == "set_turbo_sleep":
+    config = await get_configs(user_id)
+    current_count = config.get('turbo_count', 0)
+    if current_count == 0:
+        return await query.answer("Enable Turbo mode first (set a count > 0)", show_alert=True)
+
+    await query.message.delete()
+    msg = await bot.ask(
+        user_id,
+        "**⏱️ Turbo Sleep Duration**\n\n"
+        "How many seconds should the bot sleep after reaching the turbo count?\n\n"
+        "**Example:** `30`\n"
+        "Send /cancel to abort."
+    )
+    if msg.text == '/cancel':
+        return await msg.reply("Cancelled.")
+    try:
+        sleep_sec = int(msg.text.strip())
+        if sleep_sec < 1:
+            raise ValueError
+    except ValueError:
+        return await msg.reply("❌ Invalid number! Please send a positive integer (seconds).")
+    await update_configs(user_id, 'turbo_sleep', sleep_sec)
+    await msg.reply(f"✅ Turbo sleep duration set to {sleep_sec} seconds.")
+    # Refresh extra settings
+    markup = await extra_buttons(user_id)
+    await msg.reply("Extra settings:", reply_markup=markup)
 
   elif type.startswith("alert"):
     alert = type.split('_')[1]
@@ -603,9 +661,12 @@ async def extra_buttons(user_id):
     # Safely get values with defaults if keys don't exist
     link_remove = config.get('link_remove', False)
     replace_link = config.get('replace_link', None)
-    turbo_mode = config.get('turbo_mode', False)  # NEW: Get turbo mode status
+    turbo_count = config.get('turbo_count', 0)
+    turbo_sleep = config.get('turbo_sleep', 0)
     
     replace_text = 'Set' if not replace_link else 'Change'
+    turbo_status = f"Count: {turbo_count}" if turbo_count else "Turbo OFF"
+    turbo_sleep_text = f"Sleep: {turbo_sleep}s" if turbo_sleep else "Set Sleep"
     
     buttons = [[
         InlineKeyboardButton('💾 Mɪɴ Sɪᴢᴇ Lɪᴍɪᴛ',
@@ -629,10 +690,9 @@ async def extra_buttons(user_id):
         InlineKeyboardButton(replace_text,
                     callback_data=f'settings#set_replace_link')
         ],[
-        InlineKeyboardButton('⚡ Turbo Mode',  # NEW: Turbo mode button
-                    callback_data=f'settings#turbo_mode'),
-        InlineKeyboardButton('✅' if turbo_mode else '❌',
-                    callback_data=f'settings#toggle_turbo')
+        InlineKeyboardButton('🚀 Turbo Mode', callback_data=f'settings#turbo_info'),
+        InlineKeyboardButton(turbo_status, callback_data=f'settings#set_turbo_count'),
+        InlineKeyboardButton(turbo_sleep_text, callback_data=f'settings#set_turbo_sleep')
         ],[
         InlineKeyboardButton('⫷ Bᴀᴄᴋ',
                     callback_data=f'settings#main')
