@@ -25,20 +25,12 @@ from pyrogram.errors import (
     PasswordHashInvalid
 )
 
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 BTN_URL_REGEX = re.compile(r"(\[([^\[]+?)]\[buttonurl:/{0,2}(.+?)(:same)?])")
 BOT_TOKEN_TEXT = "<b>1) create a bot using @BotFather\n2) Then you will get a message with bot token\n3) Forward that message to me</b>"
 SESSION_STRING_SIZE = 351
-
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
 
 class CLIENT: 
   def __init__(self):
@@ -89,12 +81,10 @@ class CLIENT:
      user_id = int(message.from_user.id)
      buttons = [[InlineKeyboardButton('back', callback_data="settings#bots")]]
      
-     # Disclaimer message
      text = "<b>⚠️ DISCLAIMER ⚠️</b>\n\n<code>you can use your session for forward message from private chat to another chat.\nPlease add your pyrogram session with your own risk. Their is a chance to ban your account. My developer is not responsible if your account may get banned.</code>"
      
      await bot.send_message(user_id, text=text)
      
-     # Ask for phone number
      phone_number_msg = await bot.ask(chat_id=user_id, text="<b>Please send your phone number which includes country code</b>\n<b>Example:</b> <code>+13124562345</code>\n\n<b>Send /cancel to cancel</b>")
      
      if phone_number_msg.text=='/cancel':
@@ -102,7 +92,6 @@ class CLIENT:
      
      phone_number = phone_number_msg.text.strip()
      
-     # Validate phone number format
      if not phone_number.startswith('+') or not phone_number[1:].isdigit():
         return await phone_number_msg.reply('<b>Invalid phone number format! Please include country code starting with + followed by numbers only.</b>')
      
@@ -176,19 +165,11 @@ class CLIENT:
         reply_markup=InlineKeyboardMarkup(buttons))
      return True
 
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
-
 @Client.on_message(filters.private & filters.command('reset'))
 async def forward_tag(bot, m):
    default = await db.get_configs("01")
    await db.update_configs(m.from_user.id, default)
    await m.reply("successfully settings reseted ✔️")
-
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
 
 @Client.on_message(filters.command('resetall') & filters.user(Config.BOT_OWNER))
 async def resetall(bot, message):
@@ -214,30 +195,17 @@ async def resetall(bot, message):
      await message.reply(ERRORS[:100])
   await sts.edit("completed\n" + TEXT.format(total, success, failed, already))
 
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
-
 async def get_configs(user_id):
   configs = await db.get_configs(user_id)
   return configs
 
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
-
 async def update_configs(user_id, key, value):
   current = await db.get_configs(user_id)
-  # 🚀 Added turbo keys to allowed list
   if key in ['caption', 'duplicate', 'db_uri', 'forward_tag', 'protect', 'min_size', 'max_size', 'extension', 'keywords', 'button', 'link_remove', 'forward_delay', 'replace_link', 'turbo_count', 'turbo_sleep']:
      current[key] = value
   else: 
      current['filters'][key] = value
   await db.update_configs(user_id, current)
-
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
 
 async def iter_messages(
     self,
@@ -263,19 +231,11 @@ async def iter_messages(
                     
                 current += 1
 
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
-
 async def get_client(bot_token, is_bot=True):
   if is_bot:
     return Client("BOT", Config.API_ID, Config.API_HASH, bot_token=bot_token, in_memory=True)
   else:
     return Client("USERBOT", Config.API_ID, Config.API_HASH, session_string=bot_token)
-
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
 
 def parse_buttons(text, markup=True):
     buttons = []
@@ -298,7 +258,3 @@ def parse_buttons(text, markup=True):
     if markup and buttons:
        buttons = InlineKeyboardMarkup(buttons)
     return buttons if buttons else None
-
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
