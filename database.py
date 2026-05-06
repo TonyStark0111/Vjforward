@@ -82,7 +82,6 @@ class Db:
         await self.col.update_one({'id': int(id)}, {'$set': {'configs': configs}})
 
     async def get_configs(self, id):
-        # Default configuration with all required fields
         default = {
             'caption': None,
             'duplicate': True,
@@ -96,8 +95,9 @@ class Db:
             'db_uri': None,
             'link_remove': False,
             'replace_link': None,
-            'turbo_count': 0,      # 🚀 NEW: 0 = disabled
-            'turbo_sleep': 0,      # 🚀 NEW: seconds to sleep
+            'forward_delay': 0,
+            'turbo_count': 20,
+            'turbo_sleep': 30,
             'filters': {
                'poll': True,
                'text': True,
@@ -113,7 +113,6 @@ class Db:
         
         user = await self.col.find_one({'id': int(id)})
         if user and 'configs' in user:
-            # Merge existing config with default to ensure all keys exist
             config = user['configs']
             merged = default.copy()
             merged.update(config)
