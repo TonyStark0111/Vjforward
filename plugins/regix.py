@@ -16,7 +16,7 @@ from .test import CLIENT, get_client, iter_messages
 from config import Config, temp
 from script import Script
 from pyrogram import Client, filters 
-from pyrogram.errors import FloodWait, MessageNotModified
+from pyrogram.errors import FloodWait, MessageNotModified, ChannelInvalid, ChannelPrivate
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message 
 from .db import connect_user_db
 from pyrogram.types import Message
@@ -162,6 +162,10 @@ async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None):
     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
 
 
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
+
 @Client.on_callback_query(filters.regex(r'^start_public'))
 async def pub_(bot, message):
     user = message.from_user.id
@@ -177,7 +181,25 @@ async def pub_(bot, message):
     if i.TO in temp.IS_FRWD_CHAT:
       return await message.answer("In Target chat a task is progressing. please wait until task complete", show_alert=True)
     m = await msg_edit(message.message, "<code>verifying your data's, please wait.</code>")
+    
+    # Get user's bot settings
     _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
+    
+    # ============ FIX: Force userbot for private channels ============
+    source_chat_id = sts.get("FROM")
+    is_private_channel = isinstance(source_chat_id, int) and source_chat_id < 0
+    
+    if is_private_channel:
+        userbot = await db.get_userbot(user)
+        if userbot and userbot.get('enabled', True):
+            # Check if we're currently using a normal bot
+            if _bot and _bot.get('is_bot', True):
+                # Switch to userbot
+                _bot = userbot
+                # Refresh data with userbot
+                _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
+                await msg_edit(m, "<code>Private channel detected. Using your userbot...</code>")
+    
     filter = datas['filters']
     max_size = datas['max_size']
     min_size = datas['min_size']
@@ -197,30 +219,70 @@ async def pub_(bot, message):
         extensions = extensions.rstrip("|")
     else:
         extensions = None
+    
     if not _bot:
       return await msg_edit(m, "<code>You didn't added any bot. Please add a bot using /settings !</code>", wait=True)
+    
     if _bot['is_bot'] == True:
         data = _bot['token']
+        is_bot_type = True
     else:
         data = _bot['session']
+        is_bot_type = False
+    
     try:
-      il = True if _bot['is_bot'] == True else False
-      client = await get_client(data, is_bot=il)
+      client = await get_client(data, is_bot=is_bot_type)
       await client.start()
     except Exception as e:  
       return await m.edit(e)
+    
     await msg_edit(m, "<code>processing..</code>")
+    
+    # ============ FIX: Try to access source chat, switch bot if needed ============
     try: 
        await client.get_messages(sts.get("FROM"), sts.get("limit"))
-    except:
-       await msg_edit(m, f"**Source chat may be a private channel / group. Use userbot (user must be member over there) or  if Make Your [Bot](t.me/{_bot['username']}) an admin over there**", retry_btn(frwd_id), True)
-       return await stop(client, user)
+    except (ChannelInvalid, ChannelPrivate) as e:
+        # If normal bot fails on private chat, try switching to userbot
+        if _bot and _bot.get('is_bot', True):
+            userbot = await db.get_userbot(user)
+            if userbot and userbot.get('enabled', True):
+                await msg_edit(m, "<code>Switching to userbot for private channel...</code>")
+                try:
+                    await client.stop()
+                    if userbot['is_bot'] == True:
+                        udata = userbot['token']
+                        u_is_bot = True
+                    else:
+                        udata = userbot['session']
+                        u_is_bot = False
+                    client = await get_client(udata, is_bot=u_is_bot)
+                    await client.start()
+                    # Retry the message fetch
+                    await client.get_messages(sts.get("FROM"), sts.get("limit"))
+                    _bot = userbot
+                    # Refresh datas
+                    _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
+                except Exception as second_error:
+                    await msg_edit(m, f"**Both bot and userbot failed to access source chat.**\n\nMake sure your userbot is a member of that channel/group.\n\nError: {second_error}", retry_btn(frwd_id), True)
+                    return await stop(client, user)
+            else:
+                await msg_edit(m, f"**Source chat may be private. Please enable a userbot in /settings**", retry_btn(frwd_id), True)
+                return await stop(client, user)
+        else:
+            await msg_edit(m, f"**Cannot access source chat. Make sure your userbot is a member.**\n\n{str(e)}", retry_btn(frwd_id), True)
+            return await stop(client, user)
+    except Exception as e:
+        await msg_edit(m, f"**Source chat error: {str(e)[:200]}**", retry_btn(frwd_id), True)
+        return await stop(client, user)
+    
+    # Check target channel access
     try:
        k = await client.send_message(i.TO, "Testing")
        await k.delete()
-    except:
-       await msg_edit(m, f"**Please Make Your [UserBot / Bot](t.me/{_bot['username']}) Admin In Target Channel With Full Permissions**", retry_btn(frwd_id), True)
+    except Exception as e:
+       await msg_edit(m, f"**Please make your {'UserBot' if not is_bot_type else 'Bot'} admin in target channel with full permissions.**\n\nError: {str(e)[:100]}", retry_btn(frwd_id), True)
        return await stop(client, user)
+    
     user_have_db = False
     dburi = datas['db_uri']
     if dburi is not None:
@@ -229,6 +291,7 @@ async def pub_(bot, message):
             await msg_edit(m, "<code>Cannot Connected Your db Errors Found Dup files Have Been Skipped after Restart</code>")
         else:
             user_have_db = True
+    
     temp.forwardings += 1
     await db.add_frwd(user)
     await send(client, user, "<b>Fᴏʀᴡᴀʀᴅɪɴɢ sᴛᴀʀᴛᴇᴅ🔥</b>")
@@ -359,6 +422,10 @@ async def pub_(bot, message):
             await user_db.close()
         await stop(client, user)
         
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
+
 async def copy(user, bot, msg, m, sts):
    try:                               
      if msg.get("media") and msg.get("caption"):
@@ -895,3 +962,7 @@ async def complete_time(total_files, files_per_minute=30):
     if seconds > 0:
         time_format += f"{int(seconds)}s"
     return time_format
+
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
