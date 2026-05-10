@@ -162,6 +162,18 @@ async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None):
     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
 
 
+# ============ LIVE CONFIG RELOAD FUNCTION ============
+
+async def reload_turbo_config(user, current_datas):
+    """Reload user config from database and update turbo/delay settings."""
+    new_configs = await db.get_configs(user)
+    new_datas = current_datas.copy()
+    new_datas['turbo_count'] = new_configs.get('turbo_count', 20)
+    new_datas['turbo_sleep'] = new_configs.get('turbo_sleep', 30)
+    new_datas['forward_delay'] = new_configs.get('forward_delay', 0)
+    return new_datas
+
+
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @KingVJ01
@@ -192,11 +204,8 @@ async def pub_(bot, message):
     if is_private_channel:
         userbot = await db.get_userbot(user)
         if userbot and userbot.get('enabled', True):
-            # Check if we're currently using a normal bot
             if _bot and _bot.get('is_bot', True):
-                # Switch to userbot
                 _bot = userbot
-                # Refresh data with userbot
                 _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
                 await msg_edit(m, "<code>Private channel detected. Using your userbot...</code>")
     
@@ -238,11 +247,10 @@ async def pub_(bot, message):
     
     await msg_edit(m, "<code>processing..</code>")
     
-    # ============ FIX: Try to access source chat, switch bot if needed ============
+    # ============ Try to access source chat, switch bot if needed ============
     try: 
        await client.get_messages(sts.get("FROM"), sts.get("limit"))
     except (ChannelInvalid, ChannelPrivate) as e:
-        # If normal bot fails on private chat, try switching to userbot
         if _bot and _bot.get('is_bot', True):
             userbot = await db.get_userbot(user)
             if userbot and userbot.get('enabled', True):
@@ -257,13 +265,11 @@ async def pub_(bot, message):
                         u_is_bot = False
                     client = await get_client(udata, is_bot=u_is_bot)
                     await client.start()
-                    # Retry the message fetch
                     await client.get_messages(sts.get("FROM"), sts.get("limit"))
                     _bot = userbot
-                    # Refresh datas
                     _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
                 except Exception as second_error:
-                    await msg_edit(m, f"**Both bot and userbot failed to access source chat.**\n\nMake sure your userbot is a member of that channel/group.\n\nError: {second_error}", retry_btn(frwd_id), True)
+                    await msg_edit(m, f"**Both bot and userbot failed.**\n\n{second_error}", retry_btn(frwd_id), True)
                     return await stop(client, user)
             else:
                 await msg_edit(m, f"**Source chat may be private. Please enable a userbot in /settings**", retry_btn(frwd_id), True)
@@ -297,36 +303,53 @@ async def pub_(bot, message):
     await send(client, user, "<b>Fᴏʀᴡᴀʀᴅɪɴɢ sᴛᴀʀᴛᴇᴅ🔥</b>")
     sts.add(time=True)
     
-    # FORWARD DELAY - Use user setting or auto (3s bot, 6s userbot)
+    # Initial turbo & delay values
+    turbo_count = datas.get('turbo_count', 20)
+    turbo_sleep = datas.get('turbo_sleep', 30)
     forward_delay_cfg = datas.get('forward_delay', 0)
-    if forward_delay_cfg > 0:
-        sleep = forward_delay_cfg
-    else:
-        sleep = 3 if _bot['is_bot'] else 6
     
     await msg_edit(m, "<code>processing...</code>") 
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
     
-    # TURBO SETTINGS
-    turbo_count = datas.get('turbo_count', 20)
-    turbo_sleep = datas.get('turbo_sleep', 30)
     turbo_counter = 0
-    
     dup_files = []
     if locked:
         try:
           MSG = []
-          pling=0
+          pling = 0
+          msg_counter = 0   # counter for periodic config reload
           link_remove = datas['link_remove']
           replace_link = datas['replace_link']
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+          
           async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=sts.get("skip"), filters=filter, max_size=max_size):
                 if await is_cancelled(client, user, m, sts):
                    if user_have_db:
                       await user_db.drop_all()
                       await user_db.close()
                    return
+                
+                # Reload config every 10 messages to apply live changes
+                msg_counter += 1
+                if msg_counter % 10 == 0:
+                    new_datas = await reload_turbo_config(user, datas)
+                    if new_datas['turbo_count'] != turbo_count:
+                        turbo_count = new_datas['turbo_count']
+                        await msg_edit(m, f"<code>⚡ Turbo count updated to {turbo_count}</code>", wait=False)
+                    if new_datas['turbo_sleep'] != turbo_sleep:
+                        turbo_sleep = new_datas['turbo_sleep']
+                        await msg_edit(m, f"<code>😴 Turbo sleep updated to {turbo_sleep}s</code>", wait=False)
+                    if new_datas['forward_delay'] != forward_delay_cfg:
+                        forward_delay_cfg = new_datas['forward_delay']
+                        await msg_edit(m, f"<code>⏱️ Forward delay updated to {forward_delay_cfg if forward_delay_cfg>0 else 'auto'}</code>", wait=False)
+                    datas = new_datas
+                    # Also update sleep delay if changed
+                    if forward_delay_cfg > 0:
+                        sleep = forward_delay_cfg
+                    else:
+                        sleep = 3 if _bot['is_bot'] else 6
+                
                 if pling %20 == 0: 
                    await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
                 pling += 1
@@ -399,13 +422,16 @@ async def pub_(bot, message):
                    await copy(user, client, details, m, sts)
                    sts.add('total_files')
                    
+                   # Use current turbo_count and turbo_sleep (live updated)
                    if turbo_count > 0:
                        turbo_counter += 1
                        if turbo_counter >= turbo_count:
                            await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
                            turbo_counter = 0
                    
-                   await asyncio.sleep(sleep) 
+                   # Use current sleep delay (live updated)
+                   current_sleep = forward_delay_cfg if forward_delay_cfg > 0 else (3 if _bot['is_bot'] else 6)
+                   await asyncio.sleep(current_sleep) 
         except Exception as e:
             await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
             print(e)
@@ -780,7 +806,8 @@ async def restart_pending_forwads(bot, user):
     if locked:
         try:
           MSG = []
-          pling=0
+          pling = 0
+          msg_counter = 0
           link_remove = datas['link_remove']
           replace_link = datas['replace_link']
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
@@ -791,6 +818,20 @@ async def restart_pending_forwads(bot, user):
                        await user_db.close()
                        return
                     return
+                
+                # Reload config every 10 messages (live update)
+                msg_counter += 1
+                if msg_counter % 10 == 0:
+                    new_datas = await reload_turbo_config(user, datas)
+                    if new_datas['turbo_count'] != turbo_count:
+                        turbo_count = new_datas['turbo_count']
+                    if new_datas['turbo_sleep'] != turbo_sleep:
+                        turbo_sleep = new_datas['turbo_sleep']
+                    if new_datas['forward_delay'] != forward_delay_cfg:
+                        forward_delay_cfg = new_datas['forward_delay']
+                        sleep = forward_delay_cfg if forward_delay_cfg > 0 else (3 if _bot['is_bot'] else 6)
+                    datas = new_datas
+                
                 if pling %20 == 0: 
                    await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
                 pling += 1
