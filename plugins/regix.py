@@ -320,7 +320,19 @@ async def pub_(bot, message):
     temp.lock[user] = locked = True
     
     turbo_counter = 0
+    
+    # ============ FIX: Load existing duplicates from database ============
     dup_files = []
+    if user_have_db and datas['skip_duplicate']:
+        try:
+            old_files = await user_db.get_all_files()
+            async for ofile in old_files:
+                dup_files.append(ofile["file_id"])
+            await msg_edit(m, f"<code>Loaded {len(dup_files)} existing files from database for duplicate detection</code>", wait=False)
+        except Exception as e:
+            logger.error(f"Error loading duplicates from DB: {e}")
+    # ================================================================
+    
     if locked:
         try:
           MSG = []
@@ -395,6 +407,7 @@ async def pub_(bot, message):
                 elif message.animation:
                     file_id_to_check = message.animation.file_id
                 
+                # Check duplicate using loaded list from database
                 if file_id_to_check and file_id_to_check in dup_files:
                     sts.add('duplicate')
                     continue
@@ -805,11 +818,17 @@ async def restart_pending_forwads(bot, user):
     turbo_sleep = datas.get('turbo_sleep', 30)
     turbo_counter = 0
     
+    # ============ FIX: Load existing duplicates from database for restart ============
     dup_files = []
     if user_have_db and datas['skip_duplicate']:
-        old_files = await user_db.get_all_files()
-        async for ofile in old_files:
-            dup_files.append(ofile["file_id"])
+        try:
+            old_files = await user_db.get_all_files()
+            async for ofile in old_files:
+                dup_files.append(ofile["file_id"])
+        except Exception as e:
+            logger.error(f"Error loading duplicates from DB on restart: {e}")
+    # =================================================================================
+    
     if locked:
         try:
           MSG = []
@@ -877,6 +896,7 @@ async def restart_pending_forwads(bot, user):
                 elif message.animation:
                     file_id_to_check = message.animation.file_id
                 
+                # Check duplicate using loaded list from database
                 if file_id_to_check and file_id_to_check in dup_files:
                     sts.add('duplicate')
                     continue
