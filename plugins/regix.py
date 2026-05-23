@@ -122,17 +122,24 @@ def modify_caption(message, caption, link_remove, replace_link):
     base_caption = custom_caption(message, caption, strip_links=False)
     if not base_caption:
         return None
-    if replace_link or link_remove:
-        base_caption = clean_html_tags(base_caption)
+    
     if replace_link:
+        # Replacement mode: clean HTML and replace URLs
+        base_caption = clean_html_tags(base_caption)
         url_pattern = re.compile(r'(https?://\S+|t\.me/\S+|@\S+)', re.IGNORECASE)
         if replace_link.startswith('@'):
             base_caption = url_pattern.sub(replace_link, base_caption)
         else:
             base_caption = url_pattern.sub(replace_link, base_caption)
     elif link_remove:
-        base_caption = strip_urls(base_caption)
-    return base_caption
+        # Aggressive removal: strip entire anchor tags + their content
+        from .linkremoveforwd import strip_anchors_and_urls
+        base_caption = strip_anchors_and_urls(base_caption)
+    else:
+        # No removal - just clean HTML tags to avoid broken formatting
+        base_caption = clean_html_tags(base_caption)
+    
+    return base_caption if base_caption else None
 
 # ============ TURBO SLEEP HELPER ============
 
