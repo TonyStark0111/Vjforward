@@ -323,14 +323,23 @@ async def pub_(bot, message):
     
     # ============ FIX: Load existing duplicates from database ============
     dup_files = []
-    if user_have_db and datas['skip_duplicate']:
+    if user_have_db and datas.get('skip_duplicate', True):
         try:
+            await msg_edit(m, "<code>Loading existing file IDs from database...</code>", wait=False)
             old_files = await user_db.get_all_files()
+            count = 0
             async for ofile in old_files:
                 dup_files.append(ofile["file_id"])
-            await msg_edit(m, f"<code>Loaded {len(dup_files)} existing files from database for duplicate detection</code>", wait=False)
+                count += 1
+            await msg_edit(m, f"<code>✓ Loaded {count} existing files from database for duplicate detection</code>", wait=False)
         except Exception as e:
             logger.error(f"Error loading duplicates from DB: {e}")
+            await msg_edit(m, f"<code>⚠️ Failed to load duplicates: {str(e)[:100]}</code>", wait=False)
+    else:
+        if not user_have_db:
+            await msg_edit(m, "<code>⚠️ No database connected. Duplicate detection across restarts disabled.</code>", wait=False)
+        elif not datas.get('skip_duplicate', True):
+            await msg_edit(m, "<code>⚠️ Skip duplicate is disabled in settings.</code>", wait=False)
     # ================================================================
     
     if locked:
@@ -407,15 +416,18 @@ async def pub_(bot, message):
                 elif message.animation:
                     file_id_to_check = message.animation.file_id
                 
-                # Check duplicate using loaded list from database
-                if file_id_to_check and file_id_to_check in dup_files:
-                    sts.add('duplicate')
-                    continue
-                
-                if file_id_to_check and datas['skip_duplicate']:
-                    dup_files.append(file_id_to_check)
-                    if user_have_db:
-                        await user_db.add_file(file_id_to_check)
+                # ============ DUPLICATE CHECK WITH DATABASE ============
+                if file_id_to_check and datas.get('skip_duplicate', True):
+                    # Check if already in memory list (from DB or current session)
+                    if file_id_to_check in dup_files:
+                        sts.add('duplicate')
+                        continue
+                    else:
+                        # Add to memory and DB for future checks
+                        dup_files.append(file_id_to_check)
+                        if user_have_db:
+                            await user_db.add_file(file_id_to_check)
+                # ====================================================
                 
                 use_batch = forward_tag and not (link_remove or replace_link)
                 
@@ -820,7 +832,7 @@ async def restart_pending_forwads(bot, user):
     
     # ============ FIX: Load existing duplicates from database for restart ============
     dup_files = []
-    if user_have_db and datas['skip_duplicate']:
+    if user_have_db and datas.get('skip_duplicate', True):
         try:
             old_files = await user_db.get_all_files()
             async for ofile in old_files:
@@ -896,15 +908,16 @@ async def restart_pending_forwads(bot, user):
                 elif message.animation:
                     file_id_to_check = message.animation.file_id
                 
-                # Check duplicate using loaded list from database
-                if file_id_to_check and file_id_to_check in dup_files:
-                    sts.add('duplicate')
-                    continue
-                
-                if file_id_to_check and datas['skip_duplicate']:
-                    dup_files.append(file_id_to_check)
-                    if user_have_db:
-                        await user_db.add_file(file_id_to_check)
+                # ============ DUPLICATE CHECK WITH DATABASE ============
+                if file_id_to_check and datas.get('skip_duplicate', True):
+                    if file_id_to_check in dup_files:
+                        sts.add('duplicate')
+                        continue
+                    else:
+                        dup_files.append(file_id_to_check)
+                        if user_have_db:
+                            await user_db.add_file(file_id_to_check)
+                # ====================================================
                 
                 use_batch = forward_tag and not (link_remove or replace_link)
                 
