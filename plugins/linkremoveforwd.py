@@ -4,12 +4,13 @@
 
 import re
 
-# Improved regex that matches:
-# - Full URLs (http://, https://)
-# - Protocol-less domains (example.com, sub.domain.co.uk)
-# - t.me/ links
-# - @mentions
-# - Common autolinked patterns like "duckde.me"
+# 1. Matches Markdown links: [text](url)
+MARKDOWN_LINK_PATTERN = re.compile(r'\[.*?\]\((.*?)\)')
+
+# 2. Matches HTML links: <a href="url">text</a>
+HTML_LINK_PATTERN = re.compile(r'<a\s+(?:[^>]*?\s+)?href="([^"]*)"[^>]*>([\s\S]*?)</a>', re.IGNORECASE)
+
+# 3. Matches standard URLs, t.me links, and @mentions
 URL_PATTERN = re.compile(
     r'(?:https?://)?'                     # optional protocol
     r'(?:[a-zA-Z0-9-]+\.)+'               # domain name parts (at least one dot)
@@ -21,11 +22,19 @@ URL_PATTERN = re.compile(
 )
 
 def strip_urls(text: str) -> str:
-    """Remove all URLs (including protocol-less domains), t.me links, and @mentions."""
+    """Remove all URLs, markdown links (including anchor text), HTML links, and @mentions."""
     if not text:
         return text
-    # Replace matched URLs with empty string and clean up extra spaces
+    
+    # First, completely remove Markdown links including their text
+    text = MARKDOWN_LINK_PATTERN.sub('', text)
+    
+    # Second, completely remove HTML links including their text
+    text = HTML_LINK_PATTERN.sub('', text)
+    
+    # Finally, clean up any remaining plain text URLs or @mentions
     text = URL_PATTERN.sub('', text)
-    # Remove double spaces that might remain
+    
+    # Remove double spaces/newlines that might remain
     text = re.sub(r'\s+', ' ', text).strip()
     return text
