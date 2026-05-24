@@ -284,15 +284,14 @@ async def pub_(bot, message):
     user_have_db = False
     dburi = datas['db_uri']
     if dburi is not None:
-        await msg_edit(m, f"<code>🔌 Connecting to MongoDB: {dburi[:30]}...</code>", wait=False)
         connected, user_db = await connect_user_db(user, dburi, i.TO)
         if not connected:
-            await msg_edit(m, "<code>❌ Cannot connect to database. Duplicate detection across restarts will NOT work.</code>")
+            await msg_edit(m, "<code>❌ Cannot connect to database. Duplicate detection will be limited.</code>")
         else:
             user_have_db = True
             await msg_edit(m, "<code>✅ Database connected successfully.</code>", wait=False)
     else:
-        await msg_edit(m, "<code>⚠️ No MongoDB URL set. Duplicate detection will only work within this session.</code>", wait=False)
+        await msg_edit(m, "<code>⚠️ No MongoDB URL set. Duplicate detection only within this session.</code>", wait=False)
     
     temp.forwardings += 1
     await db.add_frwd(user)
@@ -319,11 +318,7 @@ async def pub_(bot, message):
             async for ofile in old_files:
                 dup_files.append(ofile["file_id"])
                 count += 1
-                if count == 1:
-                    # Print first file_id to console for debugging
-                    print(f"[DEBUG] First file_id from DB: {ofile['file_id'][:50]}...")
             await msg_edit(m, f"<code>✅ Loaded {count} existing file IDs from database.</code>", wait=False)
-            logger.info(f"Loaded {count} duplicate file IDs for user {user}, target {i.TO}")
         except Exception as e:
             logger.error(f"Error loading duplicates: {e}")
             await msg_edit(m, f"<code>⚠️ Failed to load duplicates: {str(e)[:100]}</code>", wait=False)
@@ -331,7 +326,7 @@ async def pub_(bot, message):
         if not user_have_db:
             await msg_edit(m, "<code>⚠️ No database – duplicate detection limited to this session only.</code>", wait=False)
         elif not datas.get('skip_duplicate', True):
-            await msg_edit(m, "<code>⚠️ Skip duplicate is DISABLED in your settings. Enable it from /settings → Filters → Skip duplicate.</code>", wait=False)
+            await msg_edit(m, "<code>⚠️ Skip duplicate is DISABLED. Enable it in /settings → Filters.</code>", wait=False)
     # ================================================================
     
     if locked:
@@ -386,40 +381,49 @@ async def pub_(bot, message):
                     sts.add('filtered')
                     continue
                 
+                # Filter by file name extensions (only for documents)
                 if message.document and await extension_filter(extensions, message.document.file_name):
                     sts.add('filtered')
                     continue 
                 
+                # Filter by file size (only for documents)
                 if message.document and await size_filter(max_size, min_size, message.document.file_size):
                     sts.add('filtered')
                     continue 
                 
+                # ============ GET FILE ID FOR ALL MEDIA TYPES ============
                 file_id_to_check = None
+                media_type = None
+                
                 if message.document:
                     file_id_to_check = message.document.file_id
+                    media_type = "document"
                 elif message.video:
                     file_id_to_check = message.video.file_id
+                    media_type = "video"
                 elif message.photo:
                     file_id_to_check = message.photo.file_id
+                    media_type = "photo"
                 elif message.audio:
                     file_id_to_check = message.audio.file_id
+                    media_type = "audio"
                 elif message.animation:
                     file_id_to_check = message.animation.file_id
+                    media_type = "gif"
+                # =========================================================
                 
-                # ============ DUPLICATE CHECK ============
+                # ============ DUPLICATE CHECK (ALL MEDIA TYPES) ============
                 if file_id_to_check and datas.get('skip_duplicate', True):
-                    is_dup = file_id_to_check in dup_files
-                    # Print first few checks to console
-                    if sts.get('fetched') <= 5:
-                        print(f"[DEBUG] Msg {sts.get('fetched')}: file_id={file_id_to_check[:50]}..., in dup_files={is_dup}, total_dup_files={len(dup_files)}")
-                    if is_dup:
+                    # Check if already in memory list (from DB or current session)
+                    if file_id_to_check in dup_files:
                         sts.add('duplicate')
                         continue
                     else:
+                        # Add to memory and DB for future checks (ALL MEDIA TYPES)
                         dup_files.append(file_id_to_check)
                         if user_have_db:
                             await user_db.add_file(file_id_to_check)
-                # ========================================
+                # ====================================================
                 
                 use_batch = forward_tag and not (link_remove or replace_link)
                 
@@ -469,6 +473,7 @@ async def pub_(bot, message):
             await user_db.drop_all()
             await user_db.close()
         await stop(client, user)
+
 
 # ---------------------- COPY & FORWARD HELPERS ----------------------
 async def copy(user, bot, msg, m, sts):
@@ -815,6 +820,7 @@ async def restart_pending_forwads(bot, user):
     turbo_sleep = datas.get('turbo_sleep', 30)
     turbo_counter = 0
     
+    # ============ LOAD EXISTING DUPLICATES FOR RESTART ============
     dup_files = []
     if user_have_db and datas.get('skip_duplicate', True):
         try:
@@ -823,6 +829,7 @@ async def restart_pending_forwads(bot, user):
                 dup_files.append(ofile["file_id"])
         except Exception as e:
             logger.error(f"Error loading duplicates from DB on restart: {e}")
+    # ============================================================
     
     if locked:
         try:
@@ -878,6 +885,7 @@ async def restart_pending_forwads(bot, user):
                     sts.add('filtered')
                     continue 
                 
+                # ============ GET FILE ID FOR ALL MEDIA TYPES ============
                 file_id_to_check = None
                 if message.document:
                     file_id_to_check = message.document.file_id
@@ -889,7 +897,9 @@ async def restart_pending_forwads(bot, user):
                     file_id_to_check = message.audio.file_id
                 elif message.animation:
                     file_id_to_check = message.animation.file_id
+                # =========================================================
                 
+                # ============ DUPLICATE CHECK (ALL MEDIA TYPES) ============
                 if file_id_to_check and datas.get('skip_duplicate', True):
                     if file_id_to_check in dup_files:
                         sts.add('duplicate')
@@ -898,6 +908,7 @@ async def restart_pending_forwads(bot, user):
                         dup_files.append(file_id_to_check)
                         if user_have_db:
                             await user_db.add_file(file_id_to_check)
+                # ====================================================
                 
                 use_batch = forward_tag and not (link_remove or replace_link)
                 
