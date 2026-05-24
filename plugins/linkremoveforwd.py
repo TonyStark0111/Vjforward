@@ -4,12 +4,7 @@
 
 import re
 
-# Improved regex that matches:
-# - Full URLs (http://, https://)
-# - Protocol-less domains (example.com, sub.domain.co.uk)
-# - t.me/ links
-# - @mentions
-# - Common autolinked patterns like "duckde.me"
+# Matches: http://, https://, protocol-less domains, t.me links, @mentions
 URL_PATTERN = re.compile(
     r'(?:https?://)?'                     # optional protocol
     r'(?:[a-zA-Z0-9-]+\.)+'               # domain name parts (at least one dot)
@@ -36,11 +31,9 @@ def strip_anchors_and_urls(text: str) -> str:
     return text
 
 def strip_urls(text: str) -> str:
-    """Remove all URLs (including protocol-less domains), t.me links, and @mentions."""
+    """Legacy: Remove only URLs, t.me links, and @mentions (keeps anchor tag text)."""
     if not text:
         return text
-    # Replace matched URLs with empty string and clean up extra spaces
     text = URL_PATTERN.sub('', text)
-    # Remove double spaces that might remain
     text = re.sub(r'\s+', ' ', text).strip()
     return text
