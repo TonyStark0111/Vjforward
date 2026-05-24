@@ -20,7 +20,7 @@ from pyrogram.errors import FloodWait, MessageNotModified, ChannelInvalid, Chann
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message 
 from .db import connect_user_db
 from pyrogram.types import Message
-from .linkremoveforwd import strip_urls
+from .linkremoveforwd import strip_urls, strip_anchors_and_urls
 
 CLIENT = CLIENT()
 logger = logging.getLogger(__name__)
@@ -122,21 +122,25 @@ def modify_caption(message, caption, link_remove, replace_link):
     base_caption = custom_caption(message, caption, strip_links=False)
     if not base_caption:
         return None
-    
-    if replace_link:
+
+    # If link_remove is enabled, strip anchor tags + URLs completely
+    if link_remove:
+        base_caption = strip_anchors_and_urls(base_caption)
+    elif replace_link:
+        # When only replacing links (not removing), clean HTML tags first
         base_caption = clean_html_tags(base_caption)
         url_pattern = re.compile(r'(https?://\S+|t\.me/\S+|@\S+)', re.IGNORECASE)
         if replace_link.startswith('@'):
             base_caption = url_pattern.sub(replace_link, base_caption)
         else:
             base_caption = url_pattern.sub(replace_link, base_caption)
-    elif link_remove:
-        from .linkremoveforwd import strip_anchors_and_urls
-        base_caption = strip_anchors_and_urls(base_caption)
     else:
+        # No removal, no replacement – just clean HTML tags
         base_caption = clean_html_tags(base_caption)
-    
-    return base_caption if base_caption else None
+
+    return base_caption
+
+# ============ TURBO SLEEP HELPER ============
 
 async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None):
     if sleep_seconds <= 0:
@@ -163,7 +167,11 @@ async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None):
         remaining -= 1
     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
 
+
+# ============ LIVE CONFIG RELOAD FUNCTION ============
+
 async def reload_turbo_config(user, current_datas):
+    """Reload user config from database and update turbo/delay settings."""
     new_configs = await db.get_configs(user)
     new_datas = current_datas.copy()
     new_datas['turbo_count'] = new_configs.get('turbo_count', 20)
@@ -171,7 +179,10 @@ async def reload_turbo_config(user, current_datas):
     new_datas['forward_delay'] = new_configs.get('forward_delay', 0)
     return new_datas
 
-# ==================== MAIN FORWARD HANDLER ====================
+
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
 @Client.on_callback_query(filters.regex(r'^start_public'))
 async def pub_(bot, message):
@@ -189,8 +200,10 @@ async def pub_(bot, message):
       return await message.answer("In Target chat a task is progressing. please wait until task complete", show_alert=True)
     m = await msg_edit(message.message, "<code>verifying your data's, please wait.</code>")
     
+    # Get user's bot settings
     _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
     
+    # ============ FIX: Force userbot for private channels ============
     source_chat_id = sts.get("FROM")
     is_private_channel = isinstance(source_chat_id, int) and source_chat_id < 0
     
@@ -240,6 +253,7 @@ async def pub_(bot, message):
     
     await msg_edit(m, "<code>processing..</code>")
     
+    # ============ Try to access source chat, switch bot if needed ============
     try: 
        await client.get_messages(sts.get("FROM"), sts.get("limit"))
     except (ChannelInvalid, ChannelPrivate) as e:
@@ -273,6 +287,7 @@ async def pub_(bot, message):
         await msg_edit(m, f"**Source chat error: {str(e)[:200]}**", retry_btn(frwd_id), True)
         return await stop(client, user)
     
+    # Check target channel access
     try:
        k = await client.send_message(i.TO, "Testing")
        await k.delete()
@@ -280,24 +295,21 @@ async def pub_(bot, message):
        await msg_edit(m, f"**Please make your {'UserBot' if not is_bot_type else 'Bot'} admin in target channel with full permissions.**\n\nError: {str(e)[:100]}", retry_btn(frwd_id), True)
        return await stop(client, user)
     
-    # ---------- DATABASE CONNECTION ----------
     user_have_db = False
     dburi = datas['db_uri']
     if dburi is not None:
         connected, user_db = await connect_user_db(user, dburi, i.TO)
         if not connected:
-            await msg_edit(m, "<code>❌ Cannot connect to database. Duplicate detection will be limited.</code>")
+            await msg_edit(m, "<code>Cannot Connected Your db Errors Found Dup files Have Been Skipped after Restart</code>")
         else:
             user_have_db = True
-            await msg_edit(m, "<code>✅ Database connected successfully.</code>", wait=False)
-    else:
-        await msg_edit(m, "<code>⚠️ No MongoDB URL set. Duplicate detection only within this session.</code>", wait=False)
     
     temp.forwardings += 1
     await db.add_frwd(user)
     await send(client, user, "<b>Fᴏʀᴡᴀʀᴅɪɴɢ sᴛᴀʀᴛᴇᴅ🔥</b>")
     sts.add(time=True)
     
+    # Initial turbo & delay values
     turbo_count = datas.get('turbo_count', 20)
     turbo_sleep = datas.get('turbo_sleep', 30)
     forward_delay_cfg = datas.get('forward_delay', 0)
@@ -307,33 +319,12 @@ async def pub_(bot, message):
     temp.lock[user] = locked = True
     
     turbo_counter = 0
-    
-    # ============ LOAD EXISTING DUPLICATES FROM DATABASE (USING UNIQUE ID) ============
     dup_files = []
-    if user_have_db and datas.get('skip_duplicate', True):
-        try:
-            await msg_edit(m, "<code>📂 Loading existing file unique IDs from database...</code>", wait=False)
-            old_files = await user_db.get_all_files()
-            count = 0
-            async for ofile in old_files:
-                dup_files.append(ofile["file_unique_id"])
-                count += 1
-            await msg_edit(m, f"<code>✅ Loaded {count} existing file unique IDs from database.</code>", wait=False)
-        except Exception as e:
-            logger.error(f"Error loading duplicates: {e}")
-            await msg_edit(m, f"<code>⚠️ Failed to load duplicates: {str(e)[:100]}</code>", wait=False)
-    else:
-        if not user_have_db:
-            await msg_edit(m, "<code>⚠️ No database – duplicate detection limited to this session only.</code>", wait=False)
-        elif not datas.get('skip_duplicate', True):
-            await msg_edit(m, "<code>⚠️ Skip duplicate is DISABLED. Enable it in /settings → Filters.</code>", wait=False)
-    # =================================================================================
-    
     if locked:
         try:
           MSG = []
           pling = 0
-          msg_counter = 0
+          msg_counter = 0   # counter for periodic config reload
           link_remove = datas['link_remove']
           replace_link = datas['replace_link']
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
@@ -345,6 +336,7 @@ async def pub_(bot, message):
                       await user_db.close()
                    return
                 
+                # Reload config every 10 messages to apply live changes
                 msg_counter += 1
                 if msg_counter % 10 == 0:
                     new_datas = await reload_turbo_config(user, datas)
@@ -358,6 +350,7 @@ async def pub_(bot, message):
                         forward_delay_cfg = new_datas['forward_delay']
                         await msg_edit(m, f"<code>⏱️ Forward delay updated to {forward_delay_cfg if forward_delay_cfg>0 else 'auto'}</code>", wait=False)
                     datas = new_datas
+                    # Also update sleep delay if changed
                     if forward_delay_cfg > 0:
                         sleep = forward_delay_cfg
                     else:
@@ -389,32 +382,27 @@ async def pub_(bot, message):
                     sts.add('filtered')
                     continue 
                 
-                # ============ GET FILE UNIQUE ID FOR ALL MEDIA TYPES ============
-                file_unique_id = None
-                
+                # Use file_unique_id for duplicate detection
+                file_unique_id_to_check = None
                 if message.document:
-                    file_unique_id = message.document.file_unique_id
+                    file_unique_id_to_check = message.document.file_unique_id
                 elif message.video:
-                    file_unique_id = message.video.file_unique_id
+                    file_unique_id_to_check = message.video.file_unique_id
                 elif message.photo:
-                    file_unique_id = message.photo.file_unique_id
+                    file_unique_id_to_check = message.photo.file_unique_id
                 elif message.audio:
-                    file_unique_id = message.audio.file_unique_id
+                    file_unique_id_to_check = message.audio.file_unique_id
                 elif message.animation:
-                    file_unique_id = message.animation.file_unique_id
-                # =================================================================
+                    file_unique_id_to_check = message.animation.file_unique_id
                 
-                # ============ DUPLICATE CHECK USING UNIQUE ID ============
-                if file_unique_id and datas.get('skip_duplicate', True):
-                    if file_unique_id in dup_files:
-                        sts.add('duplicate')
-                        continue
-                    else:
-                        dup_files.append(file_unique_id)
-                        if user_have_db:
-                            # Store in database using file_unique_id
-                            await user_db.add_file(file_unique_id)
-                # ========================================================
+                if file_unique_id_to_check and file_unique_id_to_check in dup_files:
+                    sts.add('duplicate')
+                    continue
+                
+                if file_unique_id_to_check and datas['skip_duplicate']:
+                    dup_files.append(file_unique_id_to_check)
+                    if user_have_db:
+                        await user_db.add_file(file_unique_id_to_check)
                 
                 use_batch = forward_tag and not (link_remove or replace_link)
                 
@@ -441,12 +429,14 @@ async def pub_(bot, message):
                    await copy(user, client, details, m, sts)
                    sts.add('total_files')
                    
+                   # Use current turbo_count and turbo_sleep (live updated)
                    if turbo_count > 0:
                        turbo_counter += 1
                        if turbo_counter >= turbo_count:
                            await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
                            turbo_counter = 0
                    
+                   # Use current sleep delay (live updated)
                    current_sleep = forward_delay_cfg if forward_delay_cfg > 0 else (3 if _bot['is_bot'] else 6)
                    await asyncio.sleep(current_sleep) 
         except Exception as e:
@@ -464,9 +454,11 @@ async def pub_(bot, message):
             await user_db.drop_all()
             await user_db.close()
         await stop(client, user)
+        
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
-
-# ---------------------- COPY & FORWARD HELPERS ----------------------
 async def copy(user, bot, msg, m, sts):
    try:                               
      if msg.get("media") and msg.get("caption"):
@@ -798,6 +790,7 @@ async def restart_pending_forwads(bot, user):
         start = None
     sts.add(time=True, start_time=start)
     
+    # FORWARD DELAY - Use user setting or auto (3s bot, 6s userbot)
     forward_delay_cfg = datas.get('forward_delay', 0)
     if forward_delay_cfg > 0:
         sleep = forward_delay_cfg
@@ -807,21 +800,16 @@ async def restart_pending_forwads(bot, user):
     temp.IS_FRWD_CHAT.append(i.TO)
     temp.lock[user] = locked = True
     
+    # TURBO SETTINGS
     turbo_count = datas.get('turbo_count', 20)
     turbo_sleep = datas.get('turbo_sleep', 30)
     turbo_counter = 0
     
-    # ============ LOAD EXISTING DUPLICATES FOR RESTART (USING UNIQUE ID) ============
     dup_files = []
-    if user_have_db and datas.get('skip_duplicate', True):
-        try:
-            old_files = await user_db.get_all_files()
-            async for ofile in old_files:
-                dup_files.append(ofile["file_unique_id"])  # Changed from file_id to file_unique_id
-        except Exception as e:
-            logger.error(f"Error loading duplicates from DB on restart: {e}")
-    # =================================================================================
-    
+    if user_have_db and datas['skip_duplicate']:
+        old_files = await user_db.get_all_files()
+        async for ofile in old_files:
+            dup_files.append(ofile["file_unique_id"])
     if locked:
         try:
           MSG = []
@@ -838,6 +826,7 @@ async def restart_pending_forwads(bot, user):
                        return
                     return
                 
+                # Reload config every 10 messages (live update)
                 msg_counter += 1
                 if msg_counter % 10 == 0:
                     new_datas = await reload_turbo_config(user, datas)
@@ -876,30 +865,27 @@ async def restart_pending_forwads(bot, user):
                     sts.add('filtered')
                     continue 
                 
-                # ============ GET FILE UNIQUE ID FOR ALL MEDIA TYPES ============
-                file_unique_id = None
+                # Use file_unique_id for duplicate detection
+                file_unique_id_to_check = None
                 if message.document:
-                    file_unique_id = message.document.file_unique_id
+                    file_unique_id_to_check = message.document.file_unique_id
                 elif message.video:
-                    file_unique_id = message.video.file_unique_id
+                    file_unique_id_to_check = message.video.file_unique_id
                 elif message.photo:
-                    file_unique_id = message.photo.file_unique_id
+                    file_unique_id_to_check = message.photo.file_unique_id
                 elif message.audio:
-                    file_unique_id = message.audio.file_unique_id
+                    file_unique_id_to_check = message.audio.file_unique_id
                 elif message.animation:
-                    file_unique_id = message.animation.file_unique_id
-                # =================================================================
+                    file_unique_id_to_check = message.animation.file_unique_id
                 
-                # ============ DUPLICATE CHECK USING UNIQUE ID ============
-                if file_unique_id and datas.get('skip_duplicate', True):
-                    if file_unique_id in dup_files:
-                        sts.add('duplicate')
-                        continue
-                    else:
-                        dup_files.append(file_unique_id)
-                        if user_have_db:
-                            await user_db.add_file(file_unique_id)
-                # ========================================================
+                if file_unique_id_to_check and file_unique_id_to_check in dup_files:
+                    sts.add('duplicate')
+                    continue
+                
+                if file_unique_id_to_check and datas['skip_duplicate']:
+                    dup_files.append(file_unique_id_to_check)
+                    if user_have_db:
+                        await user_db.add_file(file_unique_id_to_check)
                 
                 use_batch = forward_tag and not (link_remove or replace_link)
                 
@@ -1025,3 +1011,7 @@ async def complete_time(total_files, files_per_minute=30):
     if seconds > 0:
         time_format += f"{int(seconds)}s"
     return time_format
+
+# Don't Remove Credit Tg - @VJ_Botz
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @KingVJ01
