@@ -27,12 +27,12 @@ class MongoDB:
         if self.client:
             self.client.close()
 
-    async def add_file(self, file_id):
-        file = {"file_id": file_id}
+    async def add_file(self, file_unique_id):
+        file = {"file_unique_id": file_unique_id}
         return await self.files.insert_one(file)
         
-    async def is_file_exit(self, file_id):
-        f = await self.files.find_one({"file_id": file_id})
+    async def is_file_exit(self, file_unique_id):
+        f = await self.files.find_one({"file_unique_id": file_unique_id})
         return bool(f)
         
     async def get_all_files(self):
