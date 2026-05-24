@@ -404,6 +404,7 @@ async def pub_(bot, message):
                     sts.add('filtered')
                     continue 
                 
+                # Get file_id for any media type (not just documents)
                 file_id_to_check = None
                 if message.document:
                     file_id_to_check = message.document.file_id
