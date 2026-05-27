@@ -61,20 +61,28 @@ async def run(bot, message):
         return 
     
     # Parse source chat from link or forwarded message
+    is_start_link = False
+    start_msg_id = None
+    chat_id = None
+    
     if fromid.text and not fromid.forward_date:
         regex = re.compile("(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")
         match = regex.match(fromid.text.replace("?single", ""))
         if not match:
             return await message.reply('Invalid link')
         chat_id = match.group(4)
-        last_msg_id = int(match.group(5))
         if chat_id.isnumeric():
             chat_id = int(("-100" + chat_id))
+        # This is a message link → treat as starting point
+        start_msg_id = int(match.group(5))
+        is_start_link = True
     elif fromid.forward_from_chat.type in [enums.ChatType.CHANNEL, 'supergroup']:
+        # Forwarded message → treat as last message (old behaviour)
         last_msg_id = fromid.forward_from_message_id
         chat_id = fromid.forward_from_chat.username or fromid.forward_from_chat.id
         if last_msg_id == None:
            return await message.reply_text("**This may be a forwarded message from a group and sent by anonymous admin. Instead, please send the last message link from the group**")
+        is_start_link = False
     else:
         await message.reply_text("**Invalid!**")
         return 
@@ -110,11 +118,27 @@ async def run(bot, message):
         except Exception as e:
             return await message.reply(f'Error: {e}')
     
-    # Get skip number
+    # Get skip number (offset from starting point or from beginning)
     skipno = await bot.ask(message.chat.id, Script.SKIP_MSG)
     if skipno.text.startswith('/'):
         await message.reply(Script.CANCEL)
         return
+    
+    skip_value = int(skipno.text)
+    
+    # Determine offset and limit
+    if is_start_link:
+        # Start from the given message link + skip offset
+        offset = start_msg_id + skip_value
+        # Set a very high limit to get all messages until the latest
+        # (Pyrogram will stop automatically when no more messages)
+        limit = 999999999
+        skip_display = f"from message {start_msg_id} + {skip_value} skip"
+    else:
+        # Old behaviour: forward up to the forwarded message
+        offset = skip_value
+        limit = last_msg_id
+        skip_display = skip_value
     
     # Create forward session
     forward_id = f"{user_id}-{skipno.id}"
@@ -127,11 +151,11 @@ async def run(bot, message):
     bot_name = _bot['name'] if _bot else "Bot"
     bot_uname = _bot['username'] if _bot else "None"
     await message.reply_text(
-        text=Script.DOUBLE_CHECK.format(botname=bot_name, botuname=bot_uname, from_chat=title, to_chat=to_title, skip=skipno.text),
+        text=Script.DOUBLE_CHECK.format(botname=bot_name, botuname=bot_uname, from_chat=title, to_chat=to_title, skip=skip_display),
         disable_web_page_preview=True,
         reply_markup=reply_markup
     )
-    STS(forward_id).store(chat_id, toid, int(skipno.text), int(last_msg_id))
+    STS(forward_id).store(chat_id, toid, offset, limit)
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
