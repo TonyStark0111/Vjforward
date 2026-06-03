@@ -17,6 +17,8 @@ from config import Config, temp
 from script import Script
 from pyrogram import Client, filters 
 from pyrogram.errors import FloodWait, MessageNotModified, ChannelInvalid, ChannelPrivate
+from pyrogram.errors.exceptions.not_acceptable_406 import ChannelPrivate as PrivateChat
+from pyrogram.errors.exceptions.bad_request_400 import UsernameInvalid, UsernameNotModified
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message 
 from .db import connect_user_db
 from pyrogram.types import Message
@@ -111,10 +113,11 @@ async def extension_filter(extensions, file_name):
     return bool(re.search(extensions, file_name, re.IGNORECASE))
 
 def clean_html_tags(text):
+    """Remove HTML tags but preserve line breaks and spacing"""
     if not text:
         return text
     text = re.sub(r'<[^>]+>', '', text)
-    text = re.sub(r'\s+', ' ', text)
+    # ✅ No whitespace collapsing - preserve original formatting
     text = text.strip()
     return text
 
@@ -123,11 +126,11 @@ def modify_caption(message, caption, link_remove, replace_link):
     if not base_caption:
         return None
 
-    # If link_remove is enabled, strip anchor tags + URLs completely
+    # If link_remove is enabled, strip anchor tags + URLs completely (preserve formatting)
     if link_remove:
         base_caption = strip_anchors_and_urls(base_caption)
     elif replace_link:
-        # When only replacing links (not removing), clean HTML tags first
+        # When only replacing links, clean HTML tags first
         base_caption = clean_html_tags(base_caption)
         url_pattern = re.compile(r'(https?://\S+|t\.me/\S+|@\S+)', re.IGNORECASE)
         if replace_link.startswith('@'):
@@ -135,8 +138,8 @@ def modify_caption(message, caption, link_remove, replace_link):
         else:
             base_caption = url_pattern.sub(replace_link, base_caption)
     else:
-        # No removal, no replacement – just clean HTML tags
-        base_caption = clean_html_tags(base_caption)
+        # ✅ No modification – keep original formatting (line breaks, spaces, etc.)
+        pass
 
     return base_caption
 
@@ -179,10 +182,6 @@ async def reload_turbo_config(user, current_datas):
     new_datas['forward_delay'] = new_configs.get('forward_delay', 0)
     return new_datas
 
-
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
 
 @Client.on_callback_query(filters.regex(r'^start_public'))
 async def pub_(bot, message):
@@ -429,16 +428,13 @@ async def pub_(bot, message):
                    await copy(user, client, details, m, sts)
                    sts.add('total_files')
                    
-                   # Use current turbo_count and turbo_sleep (live updated)
                    if turbo_count > 0:
                        turbo_counter += 1
                        if turbo_counter >= turbo_count:
                            await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
                            turbo_counter = 0
                    
-                   # Use current sleep delay (live updated)
-                   current_sleep = forward_delay_cfg if forward_delay_cfg > 0 else (3 if _bot['is_bot'] else 6)
-                   await asyncio.sleep(current_sleep) 
+                   await asyncio.sleep(sleep) 
         except Exception as e:
             await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
             print(e)
@@ -455,9 +451,6 @@ async def pub_(bot, message):
             await user_db.close()
         await stop(client, user)
         
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
 
 async def copy(user, bot, msg, m, sts):
    try:                               
