@@ -19,21 +19,26 @@ URL_PATTERN = re.compile(
 ANCHOR_TAG_PATTERN = re.compile(r'<a\s+[^>]*>.*?</a>', re.IGNORECASE | re.DOTALL)
 
 def strip_anchors_and_urls(text: str) -> str:
-    """Remove entire <a> tags (including their content) and standalone URLs."""
+    """Remove entire <a> tags (including their content) and standalone URLs.
+       Preserves original line breaks and formatting."""
     if not text:
         return text
     # 1. Remove full anchor tags and everything inside them
     text = ANCHOR_TAG_PATTERN.sub('', text)
     # 2. Remove any remaining plain URLs (including t.me links, @mentions)
     text = URL_PATTERN.sub('', text)
-    # 3. Clean up extra spaces
-    text = re.sub(r'\s+', ' ', text).strip()
+    # 3. ✅ Clean up only extra spaces (NOT newlines)
+    text = re.sub(r'[ \t]+', ' ', text)  # Only collapse spaces/tabs, not newlines
+    text = text.strip()
     return text
 
 def strip_urls(text: str) -> str:
-    """Legacy: Remove only URLs, t.me links, and @mentions (keeps anchor tag text)."""
+    """Legacy: Remove only URLs, t.me links, and @mentions (keeps anchor tag text).
+       Preserves original line breaks and formatting."""
     if not text:
         return text
     text = URL_PATTERN.sub('', text)
-    text = re.sub(r'\s+', ' ', text).strip()
+    # ✅ Clean up only extra spaces (NOT newlines)
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = text.strip()
     return text
