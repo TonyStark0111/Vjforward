@@ -117,7 +117,6 @@ def clean_html_tags(text):
     if not text:
         return text
     text = re.sub(r'<[^>]+>', '', text)
-    # ✅ No whitespace collapsing - preserve original formatting
     text = text.strip()
     return text
 
@@ -126,11 +125,9 @@ def modify_caption(message, caption, link_remove, replace_link):
     if not base_caption:
         return None
 
-    # If link_remove is enabled, strip anchor tags + URLs completely (preserve formatting)
     if link_remove:
         base_caption = strip_anchors_and_urls(base_caption)
     elif replace_link:
-        # When only replacing links, clean HTML tags first
         base_caption = clean_html_tags(base_caption)
         url_pattern = re.compile(r'(https?://\S+|t\.me/\S+|@\S+)', re.IGNORECASE)
         if replace_link.startswith('@'):
@@ -138,7 +135,6 @@ def modify_caption(message, caption, link_remove, replace_link):
         else:
             base_caption = url_pattern.sub(replace_link, base_caption)
     else:
-        # ✅ No modification – keep original formatting (line breaks, spaces, etc.)
         pass
 
     return base_caption
@@ -323,9 +319,16 @@ async def pub_(bot, message):
         try:
           MSG = []
           pling = 0
-          msg_counter = 0   # counter for periodic config reload
+          msg_counter = 0
           link_remove = datas['link_remove']
           replace_link = datas['replace_link']
+          
+          # ✅ FIX: Define sleep before loop
+          if forward_delay_cfg > 0:
+              sleep = forward_delay_cfg
+          else:
+              sleep = 3 if _bot['is_bot'] else 6
+          
           await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
           
           async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=sts.get("skip"), filters=filter, max_size=max_size):
@@ -348,12 +351,12 @@ async def pub_(bot, message):
                     if new_datas['forward_delay'] != forward_delay_cfg:
                         forward_delay_cfg = new_datas['forward_delay']
                         await msg_edit(m, f"<code>⏱️ Forward delay updated to {forward_delay_cfg if forward_delay_cfg>0 else 'auto'}</code>", wait=False)
+                        # ✅ Update sleep if changed
+                        if forward_delay_cfg > 0:
+                            sleep = forward_delay_cfg
+                        else:
+                            sleep = 3 if _bot['is_bot'] else 6
                     datas = new_datas
-                    # Also update sleep delay if changed
-                    if forward_delay_cfg > 0:
-                        sleep = forward_delay_cfg
-                    else:
-                        sleep = 3 if _bot['is_bot'] else 6
                 
                 if pling %20 == 0: 
                    await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
@@ -1004,7 +1007,3 @@ async def complete_time(total_files, files_per_minute=30):
     if seconds > 0:
         time_format += f"{int(seconds)}s"
     return time_format
-
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
