@@ -27,8 +27,8 @@ def strip_anchors_and_urls(text: str) -> str:
     text = ANCHOR_TAG_PATTERN.sub('', text)
     # 2. Remove any remaining plain URLs (including t.me links, @mentions)
     text = URL_PATTERN.sub('', text)
-    # 3. ✅ Clean up only extra spaces (NOT newlines)
-    text = re.sub(r'[ \t]+', ' ', text)  # Only collapse spaces/tabs, not newlines
+    # 3. Clean up only extra spaces (NOT newlines)
+    text = re.sub(r'[ \t]+', ' ', text)
     text = text.strip()
     return text
 
@@ -38,7 +38,6 @@ def strip_urls(text: str) -> str:
     if not text:
         return text
     text = URL_PATTERN.sub('', text)
-    # ✅ Clean up only extra spaces (NOT newlines)
     text = re.sub(r'[ \t]+', ' ', text)
     text = text.strip()
     return text
