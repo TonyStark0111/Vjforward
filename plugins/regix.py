@@ -16,7 +16,7 @@ from .test import CLIENT, get_client, iter_messages
 from config import Config, temp
 from script import Script
 from pyrogram import Client, filters 
-from pyrogram.errors import FloodWait, MessageNotModified, ChannelInvalid, ChannelPrivate
+from pyrogram.errors import FloodWait, MessageNotModified, ChannelInvalid, ChannelPrivate, InterdcCallError
 from pyrogram.errors.exceptions.not_acceptable_406 import ChannelPrivate as PrivateChat
 from pyrogram.errors.exceptions.bad_request_400 import UsernameInvalid, UsernameNotModified
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message 
@@ -455,31 +455,55 @@ async def pub_(bot, message):
         await stop(client, user)
         
 
+# ============ FIXED COPY FUNCTION WITH INTERDC_X_CALL_ERROR HANDLING ============
+
 async def copy(user, bot, msg, m, sts):
-   try:                               
-     if msg.get("media") and msg.get("caption"):
-        await bot.send_cached_media(
-              chat_id=sts.get('TO'),
-              file_id=msg.get("media"),
-              caption=msg.get("caption"),
-              reply_markup=msg.get('button'),
-              protect_content=msg.get("protect"))
-     else:
-        await bot.copy_message(
-              chat_id=sts.get('TO'),
-              from_chat_id=sts.get('FROM'),    
-              caption=msg.get("caption"),
-              message_id=msg.get("msg_id"),
-              reply_markup=msg.get('button'),
-              protect_content=msg.get("protect"))
-   except FloodWait as e:
-     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', e.value, sts)
-     await asyncio.sleep(e.value)
-     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
-     await copy(user, bot, msg, m, sts)
-   except Exception as e:
-     print(e)
-     sts.add('deleted')
+    try:
+        # Try send_cached_media first (faster)
+        if msg.get("media") and msg.get("caption"):
+            await bot.send_cached_media(
+                chat_id=sts.get('TO'),
+                file_id=msg.get("media"),
+                caption=msg.get("caption"),
+                reply_markup=msg.get('button'),
+                protect_content=msg.get("protect")
+            )
+        else:
+            await bot.copy_message(
+                chat_id=sts.get('TO'),
+                from_chat_id=sts.get('FROM'),
+                caption=msg.get("caption"),
+                message_id=msg.get("msg_id"),
+                reply_markup=msg.get('button'),
+                protect_content=msg.get("protect")
+            )
+    except FloodWait as e:
+        await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', e.value, sts)
+        await asyncio.sleep(e.value)
+        await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+        await copy(user, bot, msg, m, sts)
+    except InterdcCallError:
+        # FALLBACK: Use copy_message for cross-datacenter transfers
+        try:
+            await bot.copy_message(
+                chat_id=sts.get('TO'),
+                from_chat_id=sts.get('FROM'),
+                caption=msg.get("caption"),
+                message_id=msg.get("msg_id"),
+                reply_markup=msg.get('button'),
+                protect_content=msg.get("protect")
+            )
+        except FloodWait as e:
+            await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', e.value, sts)
+            await asyncio.sleep(e.value)
+            await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+            await copy(user, bot, msg, m, sts)
+        except Exception as e:
+            print(f"Fallback copy failed: {e}")
+            sts.add('deleted')
+    except Exception as e:
+        print(f"Copy error: {e}")
+        sts.add('deleted')
 
 async def forward(user, bot, msg, m, sts, protect):
    try:                             
