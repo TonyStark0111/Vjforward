@@ -7,7 +7,7 @@ import re
 import sys
 import asyncio 
 import logging 
-from database import Db, db
+from database import db
 from config import Config, temp
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message 
@@ -42,7 +42,7 @@ class CLIENT:
      
   async def add_bot(self, bot, message):
      user_id = int(message.from_user.id)
-     buttons = [[InlineKeyboardButton('back', callback_data="settings#bots")]]
+     buttons = [[InlineKeyboardButton('back', callback_data="settings#main")]]
      msg = await bot.ask(chat_id=user_id, text=BOT_TOKEN_TEXT)
      if msg.text=='/cancel':
         return await msg.reply('<b>process cancelled !</b>')
@@ -61,16 +61,16 @@ class CLIENT:
        await msg.reply_text(f"<b>BOT ERROR:</b> `{e}`")
        return
      _bot = _client.me
-     details = {
-       'id': _bot.id,
+     success, result = await db.add_bot(user_id, {
        'is_bot': True,
-       'user_id': user_id,
        'name': _bot.first_name,
-       'token': bot_token,
        'username': _bot.username,
-       'enabled': True
-     }
-     await db.add_bot(details)
+       'token': bot_token,
+     })
+     if not success:
+       await msg.reply_text(f"<b>❌ {result}</b>")
+       await _client.stop()
+       return
      await _client.stop()
      await msg.reply_text(
         "<b>✅ Bot token successfully added to database!</b>",
@@ -79,7 +79,7 @@ class CLIENT:
 
   async def add_session(self, bot, message):
      user_id = int(message.from_user.id)
-     buttons = [[InlineKeyboardButton('back', callback_data="settings#bots")]]
+     buttons = [[InlineKeyboardButton('back', callback_data="settings#main")]]
      
      text = "<b>⚠️ DISCLAIMER ⚠️</b>\n\n<code>you can use your session for forward message from private chat to another chat.\nPlease add your pyrogram session with your own risk. Their is a chance to ban your account. My developer is not responsible if your account may get banned.</code>"
      
@@ -148,16 +148,17 @@ class CLIENT:
        return await message.reply_text(f"<b>USER BOT ERROR:</b> `{e}`")
      
      user = _client.me
-     details = {
-       'id': user.id,
+     success, result = await db.add_bot(user_id, {
        'is_bot': False,
-       'user_id': user_id,
        'name': user.first_name,
-       'session': string_session,
        'username': user.username,
-       'enabled': True
-     }
-     await db.add_userbot(details)
+       'session': string_session,
+     })
+     if not success:
+       await message.reply_text(f"<b>❌ {result}</b>")
+       await _client.stop()
+       return
+     
      await _client.stop()
      
      await message.reply_text(
@@ -167,8 +168,11 @@ class CLIENT:
 
 @Client.on_message(filters.private & filters.command('reset'))
 async def forward_tag(bot, m):
-   default = await db.get_configs("01")
-   await db.update_configs(m.from_user.id, default)
+   user_id = m.from_user.id
+   bots = await db.get_bots(user_id)
+   default = db._default_configs()
+   for b in bots:
+       await db.update_bot_configs(user_id, b['bot_id'], default)
    await m.reply("successfully settings reseted ✔️")
 
 @Client.on_message(filters.command('resetall') & filters.user(Config.BOT_OWNER))
@@ -180,32 +184,35 @@ async def resetall(bot, message):
   ERRORS = []
   async for user in users:
       user_id = user['id']
-      default = await get_configs(user_id)
-      default['db_uri'] = None
       total += 1
       if total %10 == 0:
          await sts.edit(TEXT.format(total, success, failed, already))
       try: 
-         await db.update_configs(user_id, default)
+         bots = await db.get_bots(user_id)
+         default = db._default_configs()
+         for b in bots:
+             await db.update_bot_configs(user_id, b['bot_id'], default)
          success += 1
       except Exception as e:
          ERRORS.append(e)
          failed += 1
   if ERRORS:
-     await message.reply(ERRORS[:100])
+     await message.reply(str(ERRORS[:100]))
   await sts.edit("completed\n" + TEXT.format(total, success, failed, already))
 
-async def get_configs(user_id):
-  configs = await db.get_configs(user_id)
+async def get_configs(user_id, bot_id):
+  configs = await db.get_bot_configs(user_id, bot_id)
   return configs
 
-async def update_configs(user_id, key, value):
-  current = await db.get_configs(user_id)
+async def update_configs(user_id, bot_id, key, value):
+  current = await db.get_bot_configs(user_id, bot_id)
   if key in ['caption', 'duplicate', 'db_uri', 'forward_tag', 'protect', 'min_size', 'max_size', 'extension', 'keywords', 'button', 'link_remove', 'forward_delay', 'replace_link', 'turbo_count', 'turbo_sleep']:
      current[key] = value
   else: 
+     if 'filters' not in current:
+         current['filters'] = {}
      current['filters'][key] = value
-  await db.update_configs(user_id, current)
+  await db.update_bot_configs(user_id, bot_id, current)
 
 async def iter_messages(
     self,
