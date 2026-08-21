@@ -164,7 +164,7 @@ async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None):
         await msg_edit(m, text, InlineKeyboardMarkup(button))
         await asyncio.sleep(1)
         remaining -= 1
-    await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+    await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, None)
 
 
 # ============ LIVE CONFIG RELOAD FUNCTION ============
@@ -205,8 +205,9 @@ async def pub_(bot, message):
         bots = await db.get_bots(user)
         for b in bots:
             if b.get('enabled', True):
-                bot_id = b['bot_id']
-                break
+                if 'bot_id' in b:
+                    bot_id = b['bot_id']
+                    break
         if bot_id is None:
             return await msg_edit(m, "<code>No bot found. Please add a bot using /settings !</code>", wait=True)
     
@@ -735,15 +736,23 @@ async def restart_pending_forwads(bot, user):
     settings = await db.get_forward_details(user_id)
     bot_id = settings.get('bot_id')
     
+    # ============ FIX: If no bot_id in settings, find first enabled bot ============
     if bot_id is None:
-        # Try to get first enabled bot
         bots = await db.get_bots(user_id)
         for b in bots:
             if b.get('enabled', True):
-                bot_id = b['bot_id']
-                break
+                if 'bot_id' in b:
+                    bot_id = b['bot_id']
+                    break
         if bot_id is None:
-            return await db.rmve_frwd(user_id)
+            await db.rmve_frwd(user_id)
+            return
+    
+    # ============ FIX: Get bot data with bot_id ============
+    _bot = await db.get_bot(user_id, bot_id)
+    if not _bot:
+        await db.rmve_frwd(user_id)
+        return
     
     try:
        skiping = settings['offset']
@@ -752,8 +761,9 @@ async def restart_pending_forwads(bot, user):
        forward_id = await store_vars(user_id, bot_id)
        sts = STS(forward_id)
        if settings['chat_id'] is None:
-           return await db.rmve_frwd(user_id)
+           await db.rmve_frwd(user_id)
            temp.forwardings -= 1
+           return
        if not sts.verify():
           temp.forwardings -= 1
           return 
@@ -762,10 +772,20 @@ async def restart_pending_forwads(bot, user):
        sts.add('filtered', value=settings['filtered'])
        sts.add('deleted', value=settings['deleted'])
        sts.add('total_files', value=settings['total'])
-       m = await bot.get_messages(user_id, settings['msg_id'])
+       
+       try:
+           m = await bot.get_messages(user_id, settings['msg_id'])
+       except:
+           await db.rmve_frwd(user_id)
+           return
        
        # ============ GET BOT DATA USING BOT_ID ============
        _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user_id, bot_id)
+       
+       if not _bot:
+          await db.rmve_frwd(user_id)
+          return
+       
        i = sts.get(full=True)
        filter = datas['filters']
        max_size = datas['max_size']
@@ -786,46 +806,71 @@ async def restart_pending_forwads(bot, user):
            extensions = extensions.rstrip("|")
        else:
            extensions = None
-       if not _bot:
-          return await msg_edit(m, "<code>You didn't added any bot. Please add a bot using /settings !</code>", wait=True)
+       
        if _bot['is_bot'] == True:
           data = _bot['token']
           is_bot_type = True
        else:
           data = _bot['session']
           is_bot_type = False
+       
        try:
           client = await get_client(data, is_bot=is_bot_type)
           await client.start()
-       except Exception as e:  
-          return await m.edit(e)
+       except Exception as e:
+          try:
+             await msg_edit(m, f"<code>Error: {str(e)[:100]}</code>", wait=True)
+          except:
+             pass
+          await db.rmve_frwd(user_id)
+          return
+       
        try:
           await msg_edit(m, "<code>processing..</code>")
        except:
-          return await db.rmve_frwd(user_id)
+          await db.rmve_frwd(user_id)
+          await client.stop()
+          return
+       
        try: 
           await client.get_messages(sts.get("FROM"), sts.get("limit"))
-       except:
-          await msg_edit(m, f"**Source chat may be a private channel / group. Use userbot (user must be member over there) or  if Make Your [Bot](t.me/{_bot['username']}) an admin over there**", retry_btn(forward_id), True)
-          return await stop_client(client, user_id, bot_id)
+       except Exception as e:
+          try:
+             await msg_edit(m, f"**Source chat may be a private channel / group. Use userbot (user must be member over there) or make Your Bot an admin over there**", retry_btn(forward_id), True)
+          except:
+             pass
+          await client.stop()
+          await db.rmve_frwd(user_id)
+          return
+       
        try:
           k = await client.send_message(i.TO, "Testing")
           await k.delete()
-       except:
-          await msg_edit(m, f"**Please Make Your [UserBot / Bot](t.me/{_bot['username']}) Admin In Target Channel With Full Permissions**", retry_btn(forward_id), True)
-          return await stop_client(client, user_id, bot_id)
+       except Exception as e:
+          try:
+             await msg_edit(m, f"**Please Make Your Bot Admin In Target Channel With Full Permissions**", retry_btn(forward_id), True)
+          except:
+             pass
+          await client.stop()
+          await db.rmve_frwd(user_id)
+          return
     except Exception as e:
        print(f"Restart error: {e}")
-       return await db.rmve_frwd(user_id)
+       await db.rmve_frwd(user_id)
+       return
     
     user_have_db = False
     dburi = datas['db_uri']
     if dburi is not None:
         connected, user_db = await connect_user_db(user_id, dburi, i.TO)
         if not connected:
-            await msg_edit(m, "<code>Cannot Connected Your db Errors Found Dup files Have Been Skipped after Restart</code>")
+            try:
+                await msg_edit(m, "<code>Cannot Connected Your db Errors Found Dup files Have Been Skipped after Restart</code>")
+            except:
+                pass
         else:
             user_have_db = True
+    
     try:
         start = settings['start_time']
     except KeyError:
@@ -857,7 +902,11 @@ async def restart_pending_forwads(bot, user):
     msg_counter = 0
     link_remove = datas['link_remove']
     replace_link = datas['replace_link']
-    await edit(user_id, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id)
+    
+    try:
+        await edit(user_id, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id)
+    except:
+        pass
     
     try:
         async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=skiping, filters=filter, max_size=max_size):
@@ -881,7 +930,10 @@ async def restart_pending_forwads(bot, user):
                 datas = new_datas
             
             if pling % 20 == 0: 
-                await edit(user_id, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id)
+                try:
+                    await edit(user_id, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id)
+                except:
+                    pass
             pling += 1
             sts.add('fetched')
             
@@ -961,20 +1013,32 @@ async def restart_pending_forwads(bot, user):
                 
                 await asyncio.sleep(sleep) 
     except Exception as e:
-        await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
+        try:
+            await msg_edit(m, f'<b>ERROR:</b>\n<code>{str(e)[:200]}</code>', wait=True)
+        except:
+            pass
         if user_have_db:
             await user_db.drop_all()
             await user_db.close()
         temp.IS_FRWD_CHAT.remove(sts.TO)
-        return await stop_client(client, user_id, bot_id)
+        await client.stop()
+        await db.rmve_frwd(user_id)
+        return
     
     temp.IS_FRWD_CHAT.remove(sts.TO)
-    await send(client, user_id, "<b>🎉 ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
+    try:
+        await send(client, user_id, "<b>🎉 ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
+    except:
+        pass
     if user_have_db:
         await user_db.drop_all()
         await user_db.close()
-    await edit(user_id, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts, bot_id) 
-    await stop_client(client, user_id, bot_id)
+    try:
+        await edit(user_id, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts, bot_id) 
+    except:
+        pass
+    await client.stop()
+    await db.rmve_frwd(user_id)
 
 async def store_vars(user_id, bot_id):
     settings = await db.get_forward_details(user_id)
