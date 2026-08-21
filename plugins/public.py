@@ -5,7 +5,7 @@
 import re
 import asyncio 
 from .utils import STS
-from database import Db, db
+from database import db
 from config import temp 
 from script import Script
 from pyrogram import Client, filters, enums
@@ -14,36 +14,64 @@ from pyrogram.errors.exceptions.not_acceptable_406 import ChannelPrivate as Priv
 from pyrogram.errors.exceptions.bad_request_400 import UsernameInvalid, UsernameNotModified
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
-
 @Client.on_message(filters.private & filters.command(["forward"]))
 async def run(bot, message):
-    buttons = []
-    btn_data = {}
     user_id = message.from_user.id
     
-    # Get user's bots
-    _bot = await db.get_bot(user_id)
-    userbot = await db.get_userbot(user_id)
+    # ============ BOT SELECTION ============
+    all_bots = await db.get_bots(user_id)
+    enabled_bots = [b for b in all_bots if b.get('enabled', True)]
     
-    # Check if user has any bot
-    if not _bot and not userbot:
-        return await message.reply("<code>You didn't added any bot. Please add a bot using /settings !</code>")
+    if not enabled_bots:
+        return await message.reply("<code>You don't have any enabled bots. Please add a bot using /settings</code>")
     
-    # Check if user has target channels
+    selected_bot = None
+    
+    if len(enabled_bots) == 1:
+        selected_bot = enabled_bots[0]
+    else:
+        buttons = []
+        for b in enabled_bots:
+            label = f"{b['name']} (@{b['username']})" if b['username'] else b['name']
+            buttons.append([InlineKeyboardButton(label, callback_data=f"select_bot_{b['bot_id']}")])
+        buttons.append([InlineKeyboardButton("Cancel", callback_data="close_btn")])
+        reply_markup = InlineKeyboardMarkup(buttons)
+        
+        await bot.send_message(
+            user_id,
+            "**You have multiple bots available.**\n\nWhich one would you like to use for this forward?",
+            reply_markup=reply_markup
+        )
+        
+        temp.BOT_SELECTION[user_id] = None
+        for _ in range(60):
+            await asyncio.sleep(1)
+            if temp.BOT_SELECTION.get(user_id) is not None:
+                bot_id = temp.BOT_SELECTION[user_id]
+                selected_bot = await db.get_bot(user_id, bot_id)
+                break
+        
+        if selected_bot is None:
+            return await message.reply("Selection timed out or cancelled.")
+        temp.BOT_SELECTION.pop(user_id, None)
+    
+    bot_id = selected_bot['bot_id']
+    is_bot = selected_bot['is_bot']
+    
+    # ============ TARGET CHANNEL SELECTION ============
     channels = await db.get_user_channels(user_id)
     if not channels:
        return await message.reply_text("Please set a target channel in /settings before forwarding")
     
-    # Select target channel
+    buttons = []
+    btn_data = {}
+    
     if len(channels) > 1:
        for channel in channels:
           buttons.append([KeyboardButton(f"{channel['title']}")])
           btn_data[channel['title']] = channel['chat_id']
        buttons.append([KeyboardButton("cancel")]) 
-       _toid = await bot.ask(message.chat.id, Script.TO_MSG.format(_bot['name'] if _bot else "Bot", _bot['username'] if _bot else "userbot"), reply_markup=ReplyKeyboardMarkup(buttons, one_time_keyboard=True, resize_keyboard=True))
+       _toid = await bot.ask(message.chat.id, Script.TO_MSG, reply_markup=ReplyKeyboardMarkup(buttons, one_time_keyboard=True, resize_keyboard=True))
        if _toid.text.startswith(('/', 'cancel')):
           return await message.reply_text(Script.CANCEL, reply_markup=ReplyKeyboardRemove())
        to_title = _toid.text
@@ -54,13 +82,12 @@ async def run(bot, message):
        toid = channels[0]['chat_id']
        to_title = channels[0]['title']
     
-    # Get source chat info
+    # ============ SOURCE CHAT ============
     fromid = await bot.ask(message.chat.id, Script.FROM_MSG, reply_markup=ReplyKeyboardRemove())
     if fromid.text and fromid.text.startswith('/'):
         await message.reply(Script.CANCEL)
         return 
     
-    # Parse source chat from link or forwarded message
     if fromid.text and not fromid.forward_date:
         regex = re.compile("(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")
         match = regex.match(fromid.text.replace("?single", ""))
@@ -79,44 +106,61 @@ async def run(bot, message):
         await message.reply_text("**Invalid!**")
         return 
     
-    # ============ IMPROVED: Validate chat access using userbot first ============
+    # ============ VALIDATE CHAT ACCESS ============
     title = None
-    use_userbot = userbot and userbot.get('enabled', True)
     
-    if use_userbot:
+    if isinstance(chat_id, int) and chat_id < 0:
+        if not is_bot:
+            try:
+                from .test import get_client
+                client = await get_client(selected_bot['session'], is_bot=False)
+                await client.start()
+                chat_info = await client.get_chat(chat_id)
+                title = chat_info.title
+                await client.stop()
+            except Exception as e:
+                return await message.reply_text(f"❌ Userbot cannot access this private chat.\nError: {str(e)[:100]}")
+        else:
+            userbots = await db.get_bots(user_id, is_bot=False)
+            userbot = next((u for u in userbots if u.get('enabled', True)), None)
+            if userbot:
+                try:
+                    from .test import get_client
+                    client = await get_client(userbot['session'], is_bot=False)
+                    await client.start()
+                    chat_info = await client.get_chat(chat_id)
+                    title = chat_info.title
+                    await client.stop()
+                    selected_bot = userbot
+                    bot_id = selected_bot['bot_id']
+                    is_bot = False
+                except Exception as e:
+                    return await message.reply_text(f"❌ Userbot cannot access this private chat.\nError: {str(e)[:100]}")
+            else:
+                return await message.reply_text("**This is a private channel. Please add and enable a userbot in /settings.**")
+    else:
         try:
             from .test import get_client
-            ub_client = await get_client(userbot['session'], is_bot=False)
-            await ub_client.start()
-            chat_info = await ub_client.get_chat(chat_id)
+            if is_bot:
+                client = await get_client(selected_bot['token'], is_bot=True)
+            else:
+                client = await get_client(selected_bot['session'], is_bot=False)
+            await client.start()
+            chat_info = await client.get_chat(chat_id)
             title = chat_info.title
-            await ub_client.stop()
+            await client.stop()
         except (ChannelPrivate, PrivateChat, ChannelInvalid):
-            await message.reply_text("❌ Your userbot cannot access this private chat.\n\nMake sure:\n1. Your userbot account is a member of that channel/group\n2. The channel/group exists\n3. You're using the correct link")
-            return
+            return await message.reply_text("❌ The selected bot cannot access this chat. It may be private.")
         except Exception as e:
-            await message.reply_text(f"⚠️ Userbot error: {str(e)[:100]}\n\nTrying with main bot (public channels only)...")
-            use_userbot = False
+            return await message.reply_text(f"Error: {str(e)[:100]}")
     
-    # Fallback to main bot (only for public chats)
-    if not title:
-        try:
-            chat_info = await bot.get_chat(chat_id)
-            title = chat_info.title
-        except (ChannelPrivate, PrivateChat):
-            return await message.reply_text("**This is a private channel/group. Please add and enable a userbot in /settings, then try again.**")
-        except (UsernameInvalid, UsernameNotModified):
-            return await message.reply('Invalid link specified.')
-        except Exception as e:
-            return await message.reply(f'Error: {e}')
-    
-    # Get skip number
+    # ============ SKIP NUMBER ============
     skipno = await bot.ask(message.chat.id, Script.SKIP_MSG)
     if skipno.text.startswith('/'):
         await message.reply(Script.CANCEL)
         return
     
-    # Create forward session
+    # ============ CREATE FORWARD SESSION ============
     forward_id = f"{user_id}-{skipno.id}"
     buttons = [[
         InlineKeyboardButton('✅ Yes', callback_data=f"start_public_{forward_id}"),
@@ -124,15 +168,26 @@ async def run(bot, message):
     ]]
     reply_markup = InlineKeyboardMarkup(buttons)
     
-    bot_name = _bot['name'] if _bot else "Bot"
-    bot_uname = _bot['username'] if _bot else "None"
+    bot_name = selected_bot['name']
+    bot_uname = selected_bot['username'] if selected_bot['username'] else "None"
     await message.reply_text(
         text=Script.DOUBLE_CHECK.format(botname=bot_name, botuname=bot_uname, from_chat=title, to_chat=to_title, skip=skipno.text),
         disable_web_page_preview=True,
         reply_markup=reply_markup
     )
-    STS(forward_id).store(chat_id, toid, int(skipno.text), int(last_msg_id))
+    STS(forward_id).store(chat_id, toid, int(skipno.text), int(last_msg_id), bot_id)
 
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+# ============ CALLBACK FOR BOT SELECTION ============
+@Client.on_callback_query(filters.regex(r'^select_bot_(\d+)'))
+async def select_bot_callback(bot, query):
+    user_id = query.from_user.id
+    bot_id = int(query.data.split('_')[2])
+    temp.BOT_SELECTION[user_id] = bot_id
+    await query.answer("Bot selected!")
+    await query.message.delete()
+
+# ============ CLOSE BUTTON ============
+@Client.on_callback_query(filters.regex(r'^close_btn$'))
+async def close(bot, update):
+    await update.answer()
+    await update.message.delete()
