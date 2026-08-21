@@ -12,8 +12,6 @@ class Config:
     DATABASE_URI = environ.get("DATABASE_URI", "mongodb+srv://XZonebot1:XZonebot1@cluster0.wlxgww7.mongodb.net/?appName=Cluster0")
     DATABASE_NAME = environ.get("DATABASE_NAME", "testing")
     BOT_OWNER = int(environ.get("BOT_OWNER", "8365451390"))
-
-    # New flag – set to True to enable link removal and slow forwarding
     LINK_REMOVE_FORWD = environ.get("LINK_REMOVE_FORWD", "True") == "True"
 
 
@@ -23,3 +21,5 @@ class temp(object):
     forwardings = 0
     BANNED_USERS = []
     IS_FRWD_CHAT = []
+    BOT_SELECTION = {}
+    BOT_BUSY = {}
