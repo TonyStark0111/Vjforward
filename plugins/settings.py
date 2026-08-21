@@ -41,7 +41,7 @@ def main_buttons():
                     callback_data='settings#extra_main')
        ],[
        InlineKeyboardButton('⫷ Bᴀᴄᴋ',
-                    callback_data='help')
+                    callback_data='settings#main')
        ]]
   return InlineKeyboardMarkup(buttons)
 
@@ -176,7 +176,7 @@ async def settings_query(bot, query):
         "<b>Successfully updated</b>" if chat else "<b>This channel already added</b>",
         reply_markup=InlineKeyboardMarkup(buttons))
   
-  elif action.startswith("editchannels"): 
+  elif action.startswith("editchannels_"): 
      chat_id = action.split('_')[1]
      chat = await db.get_channel_details(user_id, chat_id)
      buttons = [[InlineKeyboardButton('❌ Remove ❌', callback_data=f"settings#removechannel_{chat_id}")],
@@ -185,7 +185,7 @@ async def settings_query(bot, query):
         f"<b><u>📄 CHANNEL DETAILS</b></u>\n\n<b>- TITLE:</b> <code>{chat['title']}</code>\n<b>- CHANNEL ID: </b> <code>{chat['chat_id']}</code>\n<b>- USERNAME:</b> {chat['username']}",
         reply_markup=InlineKeyboardMarkup(buttons))
   
-  elif action.startswith("removechannel"):
+  elif action.startswith("removechannel_"):
      chat_id = action.split('_')[1]
      await db.remove_channel(user_id, chat_id)
      await query.answer("Channel removed!", show_alert=True)
@@ -194,13 +194,15 @@ async def settings_query(bot, query):
   
   # ============ CAPTION MAIN ============
   elif action == "caption_main":
-     # Show list of bots to choose for caption settings
      bots = await db.get_bots(user_id)
      buttons = []
-     for b in bots:
-         status = "✅" if b.get('enabled', True) else "❌"
-         label = f"{status} {b['name']}"
-         buttons.append([InlineKeyboardButton(label, callback_data=f"settings#caption_{b['bot_id']}")])
+     if not bots:
+         buttons.append([InlineKeyboardButton('❌ No Bots Found', callback_data='settings#main')])
+     else:
+         for b in bots:
+             status = "✅" if b.get('enabled', True) else "❌"
+             label = f"{status} {b['name']}"
+             buttons.append([InlineKeyboardButton(label, callback_data=f"settings#caption_{b['bot_id']}")])
      buttons.append([InlineKeyboardButton('⫷ Bᴀᴄᴋ', callback_data='settings#main')])
      await query.message.edit_text(
         "<b><u>Choose Bot for Caption Settings</b></u>",
@@ -258,10 +260,13 @@ async def settings_query(bot, query):
   elif action == "button_main":
      bots = await db.get_bots(user_id)
      buttons = []
-     for b in bots:
-         status = "✅" if b.get('enabled', True) else "❌"
-         label = f"{status} {b['name']}"
-         buttons.append([InlineKeyboardButton(label, callback_data=f"settings#button_{b['bot_id']}")])
+     if not bots:
+         buttons.append([InlineKeyboardButton('❌ No Bots Found', callback_data='settings#main')])
+     else:
+         for b in bots:
+             status = "✅" if b.get('enabled', True) else "❌"
+             label = f"{status} {b['name']}"
+             buttons.append([InlineKeyboardButton(label, callback_data=f"settings#button_{b['bot_id']}")])
      buttons.append([InlineKeyboardButton('⫷ Bᴀᴄᴋ', callback_data='settings#main')])
      await query.message.edit_text(
         "<b><u>Choose Bot for Button Settings</b></u>",
@@ -318,7 +323,6 @@ async def settings_query(bot, query):
   elif action == "database_main":
      buttons = []
      db_uri = None
-     # Check first bot's config for db_uri
      bots = await db.get_bots(user_id)
      for b in bots:
          configs = b.get('configs', {})
@@ -350,7 +354,6 @@ async def settings_query(bot, query):
         await udb.close()
      else:
         return await uri.reply("<b>Invalid Mongodb Url Cant Connect With This Uri</b>", reply_markup=InlineKeyboardMarkup(buttons))
-     # Update db_uri for all bots
      bots = await db.get_bots(user_id)
      for b in bots:
          await update_configs(user_id, b['bot_id'], 'db_uri', uri.text)
@@ -378,10 +381,13 @@ async def settings_query(bot, query):
   elif action == "filters_main":
      bots = await db.get_bots(user_id)
      buttons = []
-     for b in bots:
-         status = "✅" if b.get('enabled', True) else "❌"
-         label = f"{status} {b['name']}"
-         buttons.append([InlineKeyboardButton(label, callback_data=f"settings#filters_{b['bot_id']}")])
+     if not bots:
+         buttons.append([InlineKeyboardButton('❌ No Bots Found', callback_data='settings#main')])
+     else:
+         for b in bots:
+             status = "✅" if b.get('enabled', True) else "❌"
+             label = f"{status} {b['name']}"
+             buttons.append([InlineKeyboardButton(label, callback_data=f"settings#filters_{b['bot_id']}")])
      buttons.append([InlineKeyboardButton('⫷ Bᴀᴄᴋ', callback_data='settings#main')])
      await query.message.edit_text(
         "<b><u>Choose Bot for Filter Settings</b></u>",
@@ -416,10 +422,13 @@ async def settings_query(bot, query):
   elif action == "extra_main":
      bots = await db.get_bots(user_id)
      buttons = []
-     for b in bots:
-         status = "✅" if b.get('enabled', True) else "❌"
-         label = f"{status} {b['name']}"
-         buttons.append([InlineKeyboardButton(label, callback_data=f"settings#extra_{b['bot_id']}")])
+     if not bots:
+         buttons.append([InlineKeyboardButton('❌ No Bots Found', callback_data='settings#main')])
+     else:
+         for b in bots:
+             status = "✅" if b.get('enabled', True) else "❌"
+             label = f"{status} {b['name']}"
+             buttons.append([InlineKeyboardButton(label, callback_data=f"settings#extra_{b['bot_id']}")])
      buttons.append([InlineKeyboardButton('⫷ Bᴀᴄᴋ', callback_data='settings#main')])
      await query.message.edit_text(
         "<b><u>Choose Bot for Extra Settings</b></u>",
@@ -433,7 +442,7 @@ async def settings_query(bot, query):
   
   # ============ TURBO MODE ============
   elif action.startswith("turbo_menu_"):
-     bot_id = int(action.split('_')[1])
+     bot_id = int(action.split('_')[2])
      configs = await db.get_bot_configs(user_id, bot_id)
      count = configs.get('turbo_count', 20)
      delay = configs.get('forward_delay', 0)
@@ -502,10 +511,14 @@ async def settings_query(bot, query):
      query.data = f"settings#turbo_menu_{bot_id}"
      await settings_query(bot, query)
   
-  # ============ ALERT ============
-  elif action.startswith("alert"):
-     alert = action.split('_')[1]
-     await query.answer(alert, show_alert=True)
+  # ============ HELP BACK BUTTON ============
+  elif action == "help":
+     await query.message.edit_text(
+         Script.HELP_TXT,
+         reply_markup=InlineKeyboardMarkup([
+             [InlineKeyboardButton('⫷ Bᴀᴄᴋ', callback_data='settings#main')]
+         ])
+     )
 
 # ============ HELPER FUNCTIONS ============
 
@@ -578,8 +591,7 @@ async def filters_buttons(user_id, bot_id):
                     callback_data=f'settings_#updatefilter-{bot_id}-audio-{filters.get("audio", True)}'),
         InlineKeyboardButton('✅' if filters.get('audio', True) else '❌',
                     callback_data=f'settings#updatefilter-{bot_id}-audio-{filters.get("audio", True)}')
-        ],[
-        InlineKeyboardButton('⫷ Bᴀᴄᴋ',
+        ],[        InlineKeyboardButton('⫷ Bᴀᴄᴋ',
                     callback_data=f"settings#filters_main"),
         InlineKeyboardButton('Nᴇxᴛ ⫸',
                     callback_data=f"settings#nextfilters_{bot_id}")
@@ -648,55 +660,33 @@ async def maxsize_settings(bot, query):
     size = configs.get('max_size', 0)
     await query.message.edit_text(
        f'<b><u>Max SIZE LIMIT</b></u><b>\n\nyou can set file Maximum size limit to forward\n\nfiles with less than `{size} MB` will forward</b>',
-       reply_markup=maxsize_button(bot_id, size, 'max'))
+       reply_markup=size_button(bot_id, size, 'max'))
 
 def size_button(bot_id, size, type):
     update_type = 'update_size' if type == 'min' else 'maxupdate_size'
     buttons = [[
-        InlineKeyboardButton('+1', callback_data=f'settings#{update_type}-{bot_id}-{size + 1}'),
-        InlineKeyboardButton('-1', callback_data=f'settings#{update_type}-{bot_id}-{size - 1}')
+        InlineKeyboardButton('+1', callback_data=f'settings#{update_type}_{bot_id}_{size + 1}'),
+        InlineKeyboardButton('-1', callback_data=f'settings#{update_type}_{bot_id}_{size - 1}')
         ],[
-        InlineKeyboardButton('+5', callback_data=f'settings#{update_type}-{bot_id}-{size + 5}'),
-        InlineKeyboardButton('-5', callback_data=f'settings#{update_type}-{bot_id}-{size - 5}')
+        InlineKeyboardButton('+5', callback_data=f'settings#{update_type}_{bot_id}_{size + 5}'),
+        InlineKeyboardButton('-5', callback_data=f'settings#{update_type}_{bot_id}_{size - 5}')
         ],[
-        InlineKeyboardButton('+10', callback_data=f'settings#{update_type}-{bot_id}-{size + 10}'),
-        InlineKeyboardButton('-10', callback_data=f'settings#{update_type}-{bot_id}-{size - 10}')
+        InlineKeyboardButton('+10', callback_data=f'settings#{update_type}_{bot_id}_{size + 10}'),
+        InlineKeyboardButton('-10', callback_data=f'settings#{update_type}_{bot_id}_{size - 10}')
         ],[
-        InlineKeyboardButton('+50', callback_data=f'settings#{update_type}-{bot_id}-{size + 50}'),
-        InlineKeyboardButton('-50', callback_data=f'settings#{update_type}-{bot_id}-{size - 50}')
+        InlineKeyboardButton('+50', callback_data=f'settings#{update_type}_{bot_id}_{size + 50}'),
+        InlineKeyboardButton('-50', callback_data=f'settings#{update_type}_{bot_id}_{size - 50}')
         ],[
-        InlineKeyboardButton('+100', callback_data=f'settings#{update_type}-{bot_id}-{size + 100}'),
-        InlineKeyboardButton('-100', callback_data=f'settings#{update_type}-{bot_id}-{size - 100}')
-        ],[
-        InlineKeyboardButton('⫷ Bᴀᴄᴋ', callback_data=f"settings#extra_{bot_id}")
-        ]]
-    return InlineKeyboardMarkup(buttons)
-
-def maxsize_button(bot_id, size, type):
-    update_type = 'update_size' if type == 'min' else 'maxupdate_size'
-    buttons = [[
-        InlineKeyboardButton('+1', callback_data=f'settings#maxupdate_size-{bot_id}-{size + 1}'),
-        InlineKeyboardButton('-1', callback_data=f'settings#maxupdate_size-{bot_id}-{size - 1}')
-        ],[
-        InlineKeyboardButton('+5', callback_data=f'settings#maxupdate_size-{bot_id}-{size + 5}'),
-        InlineKeyboardButton('-5', callback_data=f'settings#maxupdate_size-{bot_id}-{size - 5}')
-        ],[
-        InlineKeyboardButton('+10', callback_data=f'settings#maxupdate_size-{bot_id}-{size + 10}'),
-        InlineKeyboardButton('-10', callback_data=f'settings#maxupdate_size-{bot_id}-{size - 10}')
-        ],[
-        InlineKeyboardButton('+50', callback_data=f'settings#maxupdate_size-{bot_id}-{size + 50}'),
-        InlineKeyboardButton('-50', callback_data=f'settings#maxupdate_size-{bot_id}-{size - 50}')
-        ],[
-        InlineKeyboardButton('+100', callback_data=f'settings#maxupdate_size-{bot_id}-{size + 100}'),
-        InlineKeyboardButton('-100', callback_data=f'settings#maxupdate_size-{bot_id}-{size - 100}')
+        InlineKeyboardButton('+100', callback_data=f'settings#{update_type}_{bot_id}_{size + 100}'),
+        InlineKeyboardButton('-100', callback_data=f'settings#{update_type}_{bot_id}_{size - 100}')
         ],[
         InlineKeyboardButton('⫷ Bᴀᴄᴋ', callback_data=f"settings#extra_{bot_id}")
         ]]
     return InlineKeyboardMarkup(buttons)
 
-@Client.on_callback_query(filters.regex(r'^settings#update_size-'))
+@Client.on_callback_query(filters.regex(r'^settings#update_size_'))
 async def update_size(bot, query):
-    parts = query.data.split('-')
+    parts = query.data.split('_')
     bot_id = int(parts[1])
     size = int(parts[2])
     if size < 0: size = 0
@@ -705,9 +695,9 @@ async def update_size(bot, query):
     query.data = f"settings#file_size_{bot_id}"
     await size_settings(bot, query)
 
-@Client.on_callback_query(filters.regex(r'^settings#maxupdate_size-'))
+@Client.on_callback_query(filters.regex(r'^settings#maxupdate_size_'))
 async def update_maxsize(bot, query):
-    parts = query.data.split('-')
+    parts = query.data.split('_')
     bot_id = int(parts[1])
     size = int(parts[2])
     if size < 0: size = 0
@@ -848,13 +838,3 @@ async def set_replace_link(bot, query):
     await msg.reply(f"Replacement set to: `{link if link else 'disabled'}`")
     query.data = f"settings#extra_{bot_id}"
     await settings_query(bot, query)
-
-# ============ HELP BACK BUTTON ============
-@Client.on_callback_query(filters.regex(r'^help'))
-async def help_back(bot, query):
-    await query.message.edit_text(
-        Script.HELP_TXT,
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton('⫷ Bᴀᴄᴋ', callback_data='settings#main')]
-        ])
-    )
