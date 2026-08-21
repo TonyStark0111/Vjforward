@@ -8,6 +8,7 @@ from pyrogram import Client as VJ, idle
 from typing import Union, Optional, AsyncGenerator
 from logging.handlers import RotatingFileHandler
 from plugins.regix import restart_forwards
+from database import db
 
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -63,9 +64,21 @@ if __name__ == "__main__":
                
     async def main():
         await VJBot.start()
-        bot_info  = await VJBot.get_me()
+        bot_info = await VJBot.get_me()
+        
+        # ============ MIGRATE OLD BOTS TO NEW MULTI-BOT SYSTEM ============
+        try:
+            await db.migrate_old_bots()
+            print("✅ Migration completed successfully!")
+        except Exception as e:
+            print(f"⚠️ Migration warning: {e}")
+        
+        # ============ RESTART PENDING FORWARDS ============
         await restart_forwards(VJBot)
-        print("Bot Started.")
+        
+        print(f"✅ Bot Started: @{bot_info.username}")
+        print("🔹 Multi-Bot Support: Up to 3 Bots + 1 Userbot")
+        print("🔹 Each bot has its own custom settings")
         await idle()
 
     asyncio.get_event_loop().run_until_complete(main())
