@@ -73,11 +73,18 @@ def unpack_new_file_id(new_file_id):
 async def unequify(client, message):
    user_id = message.from_user.id
    temp.CANCEL[user_id] = False
-   if temp.lock.get(user_id) and str(temp.lock.get(user_id))=="True":
-      return await message.reply("**please wait until previous task complete**")
-   _bot = await db.get_userbot(user_id)
+   
+   # ============ REMOVED LOCK CHECK ============
+   # REMOVED: if temp.lock.get(user_id) and str(temp.lock.get(user_id))=="True":
+   # REMOVED: return await message.reply("**please wait until previous task complete**")
+   
+   # ============ GET USERBOT (MULTI-BOT SUPPORT) ============
+   userbots = await db.get_bots(user_id, is_bot=False)
+   _bot = next((b for b in userbots if b.get('enabled', True)), None)
+   
    if not _bot:
       return await message.reply("<b>Need userbot to do this process. Please add a userbot using /settings</b>")
+   
    target = await client.ask(user_id, text="**Forward the last message from target chat or send last message link.**\n/cancel - `cancel this process`")
    if target.text and target.text.startswith("/"):
       return await message.reply("**process cancelled !**")
@@ -95,28 +102,36 @@ async def unequify(client, message):
         chat_id = target.forward_from_chat.username or target.forward_from_chat.id
    else:
         return await message.reply_text("**invalid !**")
+   
    confirm = await client.ask(user_id, text="**send /yes to start the process and /no to cancel this process**")
    if confirm.text.lower() == '/no':
       return await confirm.reply("**process cancelled !**")
+   
    sts = await confirm.reply("`processing..`")
    il = False
    data = _bot['session']
+   
    try:
       bot = await get_client(data, is_bot=il)
       await bot.start()
    except Exception as e:
       return await sts.edit(e)
+   
    try:
        k = await bot.send_message(chat_id, text="testing")
        await k.delete()
    except:
        await sts.edit(f"**please make your [userbot](t.me/{_bot['username']}) admin in target chat with full permissions**")
        return await bot.stop()
+   
    MESSAGES = []
    DUPLICATE = []
-   total=deleted=0
-   temp.lock[user_id] = True
+   total = 0
+   deleted = 0
+   # ============ REMOVED LOCK ============
+   # REMOVED: temp.lock[user_id] = True
    temp.CANCEL[user_id] = False
+   
    try:
      await sts.edit(Script.DUPLICATE_TEXT.format(total, deleted, "ᴘʀᴏɢʀᴇssɪɴɢ"), reply_markup=CANCEL_BTN)
      async for message in bot.search_messages(chat_id=chat_id, filter=enums.MessagesFilter.DOCUMENT):
@@ -130,7 +145,7 @@ async def unequify(client, message):
         else:
            MESSAGES.append(file_id)
         total += 1
-        if total %1000 == 0:
+        if total % 1000 == 0:
            await sts.edit(Script.DUPLICATE_TEXT.format(total, deleted, "ᴘʀᴏɢʀᴇssɪɴɢ"), reply_markup=CANCEL_BTN)
         if len(DUPLICATE) >= 100:
            await bot.delete_messages(chat_id, DUPLICATE)
@@ -141,10 +156,13 @@ async def unequify(client, message):
         await bot.delete_messages(chat_id, DUPLICATE)
         deleted += len(DUPLICATE)
    except Exception as e:
-       temp.lock[user_id] = False 
+       # ============ REMOVED LOCK ============
+       # REMOVED: temp.lock[user_id] = False 
        await sts.edit(f"**ERROR**\n`{e}`")
        return await bot.stop()
-   temp.lock[user_id] = False
+   
+   # ============ REMOVED LOCK ============
+   # REMOVED: temp.lock[user_id] = False
    await sts.edit(Script.DUPLICATE_TEXT.format(total, deleted, "ᴄᴏᴍᴘʟᴇᴛᴇᴅ"), reply_markup=COMPLETED_BTN)
    await bot.stop()
 
