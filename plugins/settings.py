@@ -65,6 +65,8 @@ async def settings_query(bot, query):
   # ============ LIST BOTS ============
   elif action == "list_bots":
      bots = await db.get_bots(user_id)
+     # Filter out bots without bot_id (old data that wasn't migrated)
+     bots = [b for b in bots if b.get('bot_id') is not None]
      buttons = []
      for b in bots:
          status = "✅" if b.get('enabled', True) else "❌"
@@ -195,6 +197,7 @@ async def settings_query(bot, query):
   # ============ CAPTION MAIN ============
   elif action == "caption_main":
      bots = await db.get_bots(user_id)
+     bots = [b for b in bots if b.get('bot_id') is not None]
      buttons = []
      if not bots:
          buttons.append([InlineKeyboardButton('❌ No Bots Found', callback_data='settings#main')])
@@ -259,6 +262,7 @@ async def settings_query(bot, query):
   # ============ BUTTON MAIN ============
   elif action == "button_main":
      bots = await db.get_bots(user_id)
+     bots = [b for b in bots if b.get('bot_id') is not None]
      buttons = []
      if not bots:
          buttons.append([InlineKeyboardButton('❌ No Bots Found', callback_data='settings#main')])
@@ -380,6 +384,7 @@ async def settings_query(bot, query):
   # ============ FILTERS MAIN ============
   elif action == "filters_main":
      bots = await db.get_bots(user_id)
+     bots = [b for b in bots if b.get('bot_id') is not None]
      buttons = []
      if not bots:
          buttons.append([InlineKeyboardButton('❌ No Bots Found', callback_data='settings#main')])
@@ -421,6 +426,7 @@ async def settings_query(bot, query):
   # ============ EXTRA SETTINGS ============
   elif action == "extra_main":
      bots = await db.get_bots(user_id)
+     bots = [b for b in bots if b.get('bot_id') is not None]
      buttons = []
      if not bots:
          buttons.append([InlineKeyboardButton('❌ No Bots Found', callback_data='settings#main')])
@@ -591,7 +597,8 @@ async def filters_buttons(user_id, bot_id):
                     callback_data=f'settings_#updatefilter-{bot_id}-audio-{filters.get("audio", True)}'),
         InlineKeyboardButton('✅' if filters.get('audio', True) else '❌',
                     callback_data=f'settings#updatefilter-{bot_id}-audio-{filters.get("audio", True)}')
-        ],[        InlineKeyboardButton('⫷ Bᴀᴄᴋ',
+        ],[
+        InlineKeyboardButton('⫷ Bᴀᴄᴋ',
                     callback_data=f"settings#filters_main"),
         InlineKeyboardButton('Nᴇxᴛ ⫸',
                     callback_data=f"settings#nextfilters_{bot_id}")
