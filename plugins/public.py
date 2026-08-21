@@ -106,53 +106,44 @@ async def run(bot, message):
         await message.reply_text("**Invalid!**")
         return 
     
-    # ============ VALIDATE CHAT ACCESS ============
+    # ============ VALIDATE CHAT ACCESS (FIXED) ============
     title = None
     
-    if isinstance(chat_id, int) and chat_id < 0:
-        if not is_bot:
+    # First try with the selected bot
+    try:
+        from .test import get_client
+        if is_bot:
+            client = await get_client(selected_bot['token'], is_bot=True)
+        else:
+            client = await get_client(selected_bot['session'], is_bot=False)
+        await client.start()
+        chat_info = await client.get_chat(chat_id)
+        title = chat_info.title
+        await client.stop()
+    except (ChannelPrivate, PrivateChat, ChannelInvalid) as e:
+        # Selected bot cannot access – try userbot (if available)
+        userbots = await db.get_bots(user_id, is_bot=False)
+        userbot = next((u for u in userbots if u.get('enabled', True)), None)
+        if userbot:
             try:
-                from .test import get_client
-                client = await get_client(selected_bot['session'], is_bot=False)
+                client = await get_client(userbot['session'], is_bot=False)
                 await client.start()
                 chat_info = await client.get_chat(chat_id)
                 title = chat_info.title
                 await client.stop()
-            except Exception as e:
-                return await message.reply_text(f"❌ Userbot cannot access this private chat.\nError: {str(e)[:100]}")
+                # Switch to userbot for this forward
+                selected_bot = userbot
+                bot_id = selected_bot['bot_id']
+                is_bot = False
+            except Exception as e2:
+                return await message.reply_text(f"❌ Both bot and userbot cannot access this chat.\nBot error: {e}\nUserbot error: {e2}")
         else:
-            userbots = await db.get_bots(user_id, is_bot=False)
-            userbot = next((u for u in userbots if u.get('enabled', True)), None)
-            if userbot:
-                try:
-                    from .test import get_client
-                    client = await get_client(userbot['session'], is_bot=False)
-                    await client.start()
-                    chat_info = await client.get_chat(chat_id)
-                    title = chat_info.title
-                    await client.stop()
-                    selected_bot = userbot
-                    bot_id = selected_bot['bot_id']
-                    is_bot = False
-                except Exception as e:
-                    return await message.reply_text(f"❌ Userbot cannot access this private chat.\nError: {str(e)[:100]}")
-            else:
-                return await message.reply_text("**This is a private channel. Please add and enable a userbot in /settings.**")
-    else:
-        try:
-            from .test import get_client
-            if is_bot:
-                client = await get_client(selected_bot['token'], is_bot=True)
-            else:
-                client = await get_client(selected_bot['session'], is_bot=False)
-            await client.start()
-            chat_info = await client.get_chat(chat_id)
-            title = chat_info.title
-            await client.stop()
-        except (ChannelPrivate, PrivateChat, ChannelInvalid):
-            return await message.reply_text("❌ The selected bot cannot access this chat. It may be private.")
-        except Exception as e:
-            return await message.reply_text(f"Error: {str(e)[:100]}")
+            return await message.reply_text(
+                f"❌ The selected bot cannot access this chat. It may be private.\n"
+                f"Please add and enable a userbot in /settings, or ensure your bot is an admin and has the correct permissions."
+            )
+    except Exception as e:
+        return await message.reply_text(f"Error: {str(e)[:100]}")
     
     # ============ SKIP NUMBER ============
     skipno = await bot.ask(message.chat.id, Script.SKIP_MSG)
