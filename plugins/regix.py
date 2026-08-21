@@ -169,13 +169,13 @@ async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None):
 
 # ============ LIVE CONFIG RELOAD FUNCTION ============
 
-async def reload_turbo_config(user, current_datas):
+async def reload_turbo_config(user, bot_id, current_datas):
     """Reload user config from database and update turbo/delay settings."""
-    new_configs = await db.get_configs(user)
+    configs = await db.get_bot_configs(user, bot_id)
     new_datas = current_datas.copy()
-    new_datas['turbo_count'] = new_configs.get('turbo_count', 20)
-    new_datas['turbo_sleep'] = new_configs.get('turbo_sleep', 30)
-    new_datas['forward_delay'] = new_configs.get('forward_delay', 0)
+    new_datas['turbo_count'] = configs.get('turbo_count', 20)
+    new_datas['turbo_sleep'] = configs.get('turbo_sleep', 30)
+    new_datas['forward_delay'] = configs.get('forward_delay', 0)
     return new_datas
 
 
@@ -184,8 +184,11 @@ async def pub_(bot, message):
     user = message.from_user.id
     temp.CANCEL[user] = False
     frwd_id = message.data.split("_")[2]
-    if temp.lock.get(user) and str(temp.lock.get(user))=="True":
-      return await message.answer("please wait until previous task complete", show_alert=True)
+    
+    # ============ REMOVED USER LOCK CHECK ============
+    # REMOVED: if temp.lock.get(user) and str(temp.lock.get(user))=="True":
+    # REMOVED: return await message.answer("please wait until previous task complete", show_alert=True)
+    
     sts = STS(frwd_id)
     if not sts.verify():
       await message.answer("your are clicking on my old button", show_alert=True)
@@ -195,20 +198,47 @@ async def pub_(bot, message):
       return await message.answer("In Target chat a task is progressing. please wait until task complete", show_alert=True)
     m = await msg_edit(message.message, "<code>verifying your data's, please wait.</code>")
     
-    # Get user's bot settings
-    _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
+    # ============ GET BOT_ID FROM STS ============
+    bot_id = i.bot_id
+    if bot_id is None:
+        # Fallback: get first enabled bot
+        bots = await db.get_bots(user)
+        for b in bots:
+            if b.get('enabled', True):
+                bot_id = b['bot_id']
+                break
+        if bot_id is None:
+            return await msg_edit(m, "<code>No bot found. Please add a bot using /settings !</code>", wait=True)
+    
+    # ============ CHECK IF BOT IS BUSY ============
+    if temp.BOT_BUSY.get(bot_id, False):
+        return await message.answer("This bot is currently busy with another forward. Please wait or use another bot.", show_alert=True)
+    temp.BOT_BUSY[bot_id] = True
+    
+    # ============ GET BOT DATA USING BOT_ID ============
+    _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user, bot_id)
+    
+    if not _bot:
+        temp.BOT_BUSY[bot_id] = False
+        return await msg_edit(m, "<code>You didn't added any bot. Please add a bot using /settings !</code>", wait=True)
     
     # ============ FIX: Force userbot for private channels ============
     source_chat_id = sts.get("FROM")
     is_private_channel = isinstance(source_chat_id, int) and source_chat_id < 0
     
     if is_private_channel:
-        userbot = await db.get_userbot(user)
-        if userbot and userbot.get('enabled', True):
+        userbots = await db.get_bots(user, is_bot=False)
+        userbot = next((u for u in userbots if u.get('enabled', True)), None)
+        if userbot:
             if _bot and _bot.get('is_bot', True):
                 _bot = userbot
-                _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
+                bot_id = userbot['bot_id']
+                _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user, bot_id)
                 await msg_edit(m, "<code>Private channel detected. Using your userbot...</code>")
+        else:
+            await msg_edit(m, "<code>Private channel detected but no userbot enabled. Please add a userbot in /settings</code>", wait=True)
+            temp.BOT_BUSY[bot_id] = False
+            return await stop_client(None, user, bot_id)
     
     filter = datas['filters']
     max_size = datas['max_size']
@@ -220,7 +250,7 @@ async def pub_(bot, message):
     if keyword:
         for key in keyword:
             keywords += f"{key}|"
-        keywords  = keywords.rstrip("|")
+        keywords = keywords.rstrip("|")
     else:
         keywords = None
     if exten:
@@ -229,9 +259,6 @@ async def pub_(bot, message):
         extensions = extensions.rstrip("|")
     else:
         extensions = None
-    
-    if not _bot:
-      return await msg_edit(m, "<code>You didn't added any bot. Please add a bot using /settings !</code>", wait=True)
     
     if _bot['is_bot'] == True:
         data = _bot['token']
@@ -244,6 +271,7 @@ async def pub_(bot, message):
       client = await get_client(data, is_bot=is_bot_type)
       await client.start()
     except Exception as e:  
+      temp.BOT_BUSY[bot_id] = False
       return await m.edit(e)
     
     await msg_edit(m, "<code>processing..</code>")
@@ -253,8 +281,9 @@ async def pub_(bot, message):
        await client.get_messages(sts.get("FROM"), sts.get("limit"))
     except (ChannelInvalid, ChannelPrivate) as e:
         if _bot and _bot.get('is_bot', True):
-            userbot = await db.get_userbot(user)
-            if userbot and userbot.get('enabled', True):
+            userbots = await db.get_bots(user, is_bot=False)
+            userbot = next((u for u in userbots if u.get('enabled', True)), None)
+            if userbot:
                 await msg_edit(m, "<code>Switching to userbot for private channel...</code>")
                 try:
                     await client.stop()
@@ -268,19 +297,20 @@ async def pub_(bot, message):
                     await client.start()
                     await client.get_messages(sts.get("FROM"), sts.get("limit"))
                     _bot = userbot
-                    _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
+                    bot_id = userbot['bot_id']
+                    _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user, bot_id)
                 except Exception as second_error:
                     await msg_edit(m, f"**Both bot and userbot failed.**\n\n{second_error}", retry_btn(frwd_id), True)
-                    return await stop(client, user)
+                    return await stop_client(client, user, bot_id)
             else:
                 await msg_edit(m, f"**Source chat may be private. Please enable a userbot in /settings**", retry_btn(frwd_id), True)
-                return await stop(client, user)
+                return await stop_client(client, user, bot_id)
         else:
             await msg_edit(m, f"**Cannot access source chat. Make sure your userbot is a member.**\n\n{str(e)}", retry_btn(frwd_id), True)
-            return await stop(client, user)
+            return await stop_client(client, user, bot_id)
     except Exception as e:
         await msg_edit(m, f"**Source chat error: {str(e)[:200]}**", retry_btn(frwd_id), True)
-        return await stop(client, user)
+        return await stop_client(client, user, bot_id)
     
     # Check target channel access
     try:
@@ -288,7 +318,7 @@ async def pub_(bot, message):
        await k.delete()
     except Exception as e:
        await msg_edit(m, f"**Please make your {'UserBot' if not is_bot_type else 'Bot'} admin in target channel with full permissions.**\n\nError: {str(e)[:100]}", retry_btn(frwd_id), True)
-       return await stop(client, user)
+       return await stop_client(client, user, bot_id)
     
     user_have_db = False
     dburi = datas['db_uri']
@@ -300,7 +330,7 @@ async def pub_(bot, message):
             user_have_db = True
     
     temp.forwardings += 1
-    await db.add_frwd(user)
+    await db.add_frwd(user, bot_id)
     await send(client, user, "<b>Fᴏʀᴡᴀʀᴅɪɴɢ sᴛᴀʀᴛᴇᴅ🔥</b>")
     sts.add(time=True)
     
@@ -311,148 +341,146 @@ async def pub_(bot, message):
     
     await msg_edit(m, "<code>processing...</code>") 
     temp.IS_FRWD_CHAT.append(i.TO)
-    temp.lock[user] = locked = True
     
     turbo_counter = 0
     dup_files = []
-    if locked:
-        try:
-          MSG = []
-          pling = 0
-          msg_counter = 0
-          link_remove = datas['link_remove']
-          replace_link = datas['replace_link']
-          
-          # ✅ FIX: Define sleep before loop
-          if forward_delay_cfg > 0:
-              sleep = forward_delay_cfg
-          else:
-              sleep = 3 if _bot['is_bot'] else 6
-          
-          await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
-          
-          async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=sts.get("skip"), filters=filter, max_size=max_size):
-                if await is_cancelled(client, user, m, sts):
-                   if user_have_db:
-                      await user_db.drop_all()
-                      await user_db.close()
-                   return
+    MSG = []
+    pling = 0
+    msg_counter = 0
+    link_remove = datas['link_remove']
+    replace_link = datas['replace_link']
+    
+    # Define sleep before loop
+    if forward_delay_cfg > 0:
+        sleep = forward_delay_cfg
+    else:
+        sleep = 3 if _bot['is_bot'] else 6
+    
+    await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id)
+    
+    try:
+        async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=sts.get("skip"), filters=filter, max_size=max_size):
+            if await is_cancelled(client, user, m, sts, bot_id):
+                if user_have_db:
+                    await user_db.drop_all()
+                    await user_db.close()
+                return
+            
+            # Reload config every 10 messages to apply live changes
+            msg_counter += 1
+            if msg_counter % 10 == 0:
+                new_datas = await reload_turbo_config(user, bot_id, datas)
+                if new_datas['turbo_count'] != turbo_count:
+                    turbo_count = new_datas['turbo_count']
+                    await msg_edit(m, f"<code>⚡ Turbo count updated to {turbo_count}</code>", wait=False)
+                if new_datas['turbo_sleep'] != turbo_sleep:
+                    turbo_sleep = new_datas['turbo_sleep']
+                    await msg_edit(m, f"<code>😴 Turbo sleep updated to {turbo_sleep}s</code>", wait=False)
+                if new_datas['forward_delay'] != forward_delay_cfg:
+                    forward_delay_cfg = new_datas['forward_delay']
+                    await msg_edit(m, f"<code>⏱️ Forward delay updated to {forward_delay_cfg if forward_delay_cfg>0 else 'auto'}</code>", wait=False)
+                    if forward_delay_cfg > 0:
+                        sleep = forward_delay_cfg
+                    else:
+                        sleep = 3 if _bot['is_bot'] else 6
+                datas = new_datas
+            
+            if pling % 20 == 0: 
+                await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id)
+            pling += 1
+            sts.add('fetched')
+            
+            if message == "DUPLICATE":
+                sts.add('duplicate')
+                continue
+            elif message == "FILTERED":
+                sts.add('filtered')
+                continue 
+            elif message.empty or message.service:
+                sts.add('deleted')
+                continue
+            
+            if await should_filter_by_keywords(keywords, message):
+                sts.add('filtered')
+                continue
+            
+            if message.document and await extension_filter(extensions, message.document.file_name):
+                sts.add('filtered')
+                continue 
+            
+            if message.document and await size_filter(max_size, min_size, message.document.file_size):
+                sts.add('filtered')
+                continue 
+            
+            # Use file_unique_id for duplicate detection
+            file_unique_id_to_check = None
+            if message.document:
+                file_unique_id_to_check = message.document.file_unique_id
+            elif message.video:
+                file_unique_id_to_check = message.video.file_unique_id
+            elif message.photo:
+                file_unique_id_to_check = message.photo.file_unique_id
+            elif message.audio:
+                file_unique_id_to_check = message.audio.file_unique_id
+            elif message.animation:
+                file_unique_id_to_check = message.animation.file_unique_id
+            
+            if file_unique_id_to_check and file_unique_id_to_check in dup_files:
+                sts.add('duplicate')
+                continue
+            
+            if file_unique_id_to_check and datas['skip_duplicate']:
+                dup_files.append(file_unique_id_to_check)
+                if user_have_db:
+                    await user_db.add_file(file_unique_id_to_check)
+            
+            use_batch = forward_tag and not (link_remove or replace_link)
+            
+            if use_batch:
+                MSG.append(message.id)
+                notcompleted = len(MSG)
+                completed = sts.get('total') - sts.get('fetched')
+                if (notcompleted >= 100 or completed <= 100): 
+                    await forward(user, client, MSG, m, sts, protect)
+                    sts.add('total_files', notcompleted)
+                    
+                    if turbo_count > 0:
+                        turbo_counter += notcompleted
+                        if turbo_counter >= turbo_count:
+                            await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
+                            turbo_counter = 0
+                    
+                    await asyncio.sleep(10)
+                    MSG = []
+            else:
+                new_caption = modify_caption(message, caption, link_remove, replace_link)
+                details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
+                await copy(user, client, details, m, sts)
+                sts.add('total_files')
                 
-                # Reload config every 10 messages to apply live changes
-                msg_counter += 1
-                if msg_counter % 10 == 0:
-                    new_datas = await reload_turbo_config(user, datas)
-                    if new_datas['turbo_count'] != turbo_count:
-                        turbo_count = new_datas['turbo_count']
-                        await msg_edit(m, f"<code>⚡ Turbo count updated to {turbo_count}</code>", wait=False)
-                    if new_datas['turbo_sleep'] != turbo_sleep:
-                        turbo_sleep = new_datas['turbo_sleep']
-                        await msg_edit(m, f"<code>😴 Turbo sleep updated to {turbo_sleep}s</code>", wait=False)
-                    if new_datas['forward_delay'] != forward_delay_cfg:
-                        forward_delay_cfg = new_datas['forward_delay']
-                        await msg_edit(m, f"<code>⏱️ Forward delay updated to {forward_delay_cfg if forward_delay_cfg>0 else 'auto'}</code>", wait=False)
-                        # ✅ Update sleep if changed
-                        if forward_delay_cfg > 0:
-                            sleep = forward_delay_cfg
-                        else:
-                            sleep = 3 if _bot['is_bot'] else 6
-                    datas = new_datas
+                if turbo_count > 0:
+                    turbo_counter += 1
+                    if turbo_counter >= turbo_count:
+                        await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
+                        turbo_counter = 0
                 
-                if pling %20 == 0: 
-                   await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
-                pling += 1
-                sts.add('fetched')
-                if message == "DUPLICATE":
-                   sts.add('duplicate')
-                   continue
-                elif message == "FILTERED":
-                   sts.add('filtered')
-                   continue 
-                elif message.empty or message.service:
-                   sts.add('deleted')
-                   continue
-                
-                if await should_filter_by_keywords(keywords, message):
-                    sts.add('filtered')
-                    continue
-                
-                if message.document and await extension_filter(extensions, message.document.file_name):
-                    sts.add('filtered')
-                    continue 
-                
-                if message.document and await size_filter(max_size, min_size, message.document.file_size):
-                    sts.add('filtered')
-                    continue 
-                
-                # Use file_unique_id for duplicate detection
-                file_unique_id_to_check = None
-                if message.document:
-                    file_unique_id_to_check = message.document.file_unique_id
-                elif message.video:
-                    file_unique_id_to_check = message.video.file_unique_id
-                elif message.photo:
-                    file_unique_id_to_check = message.photo.file_unique_id
-                elif message.audio:
-                    file_unique_id_to_check = message.audio.file_unique_id
-                elif message.animation:
-                    file_unique_id_to_check = message.animation.file_unique_id
-                
-                if file_unique_id_to_check and file_unique_id_to_check in dup_files:
-                    sts.add('duplicate')
-                    continue
-                
-                if file_unique_id_to_check and datas['skip_duplicate']:
-                    dup_files.append(file_unique_id_to_check)
-                    if user_have_db:
-                        await user_db.add_file(file_unique_id_to_check)
-                
-                use_batch = forward_tag and not (link_remove or replace_link)
-                
-                if use_batch:
-                   MSG.append(message.id)
-                   notcompleted = len(MSG)
-                   completed = sts.get('total') - sts.get('fetched')
-                   if ( notcompleted >= 100 
-                        or completed <= 100): 
-                      await forward(user, client, MSG, m, sts, protect)
-                      sts.add('total_files', notcompleted)
-                      
-                      if turbo_count > 0:
-                          turbo_counter += notcompleted
-                          if turbo_counter >= turbo_count:
-                              await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
-                              turbo_counter = 0
-                      
-                      await asyncio.sleep(10)
-                      MSG = []
-                else:
-                   new_caption = modify_caption(message, caption, link_remove, replace_link)
-                   details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
-                   await copy(user, client, details, m, sts)
-                   sts.add('total_files')
-                   
-                   if turbo_count > 0:
-                       turbo_counter += 1
-                       if turbo_counter >= turbo_count:
-                           await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
-                           turbo_counter = 0
-                   
-                   await asyncio.sleep(sleep) 
-        except Exception as e:
-            await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
-            print(e)
-            if user_have_db:
-                await user_db.drop_all()
-                await user_db.close()
-            temp.IS_FRWD_CHAT.remove(sts.TO)
-            return await stop(client, user)
-        temp.IS_FRWD_CHAT.remove(sts.TO)
-        await send(client, user, "<b>🎉 ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
-        await edit(user, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts) 
+                await asyncio.sleep(sleep) 
+    except Exception as e:
+        await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
+        print(e)
         if user_have_db:
             await user_db.drop_all()
             await user_db.close()
-        await stop(client, user)
+        temp.IS_FRWD_CHAT.remove(sts.TO)
+        return await stop_client(client, user, bot_id)
+    
+    temp.IS_FRWD_CHAT.remove(sts.TO)
+    await send(client, user, "<b>🎉 ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
+    await edit(user, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts, bot_id) 
+    if user_have_db:
+        await user_db.drop_all()
+        await user_db.close()
+    await stop_client(client, user, bot_id)
         
 
 async def copy(user, bot, msg, m, sts):
@@ -473,9 +501,9 @@ async def copy(user, bot, msg, m, sts):
               reply_markup=msg.get('button'),
               protect_content=msg.get("protect"))
    except FloodWait as e:
-     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', e.value, sts)
+     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', e.value, sts, None)
      await asyncio.sleep(e.value)
-     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, None)
      await copy(user, bot, msg, m, sts)
    except Exception as e:
      print(e)
@@ -489,9 +517,9 @@ async def forward(user, bot, msg, m, sts, protect):
            protect_content=protect,
            message_ids=msg)
    except FloodWait as e:
-     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', e.value, sts)
+     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', e.value, sts, None)
      await asyncio.sleep(e.value)
-     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
+     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, None)
      await forward(user, bot, msg, m, sts, protect)
 
 async def msg_edit(msg, text, button=None, wait=None):
@@ -504,7 +532,7 @@ async def msg_edit(msg, text, button=None, wait=None):
            await asyncio.sleep(e.value)
            return await msg_edit(msg, text, button, wait)
 
-async def edit(user, msg, title, status, sts):
+async def edit(user, msg, title, status, sts, bot_id):
    i = sts.get(full=True)
    status = 'Forwarding' if status == 5 else f"sleeping {status} s" if str(status).isnumeric() else status
    percentage = "{:.0f}".format(float(i.fetched)*100/float(i.total)) if i.total > 0 else "0"
@@ -519,7 +547,7 @@ async def edit(user, msg, title, status, sts):
        eta = "0 s"
    
    text = TEXT.format(i.fetched, i.total_files, i.duplicate, i.deleted, i.skip, i.filtered, status, eta, percentage, title)
-   await update_forward(user_id=user, last_id=None, start_time=i.start, limit=i.limit, chat_id=i.FROM, toid=i.TO, forward_id=None, msg_id=msg.id, fetched=i.fetched, deleted=i.deleted, total=i.total_files, duplicate=i.duplicate, skip=i.skip, filterd=i.filtered)
+   await update_forward(user_id=user, last_id=None, start_time=i.start, limit=i.limit, chat_id=i.FROM, toid=i.TO, forward_id=None, msg_id=msg.id, fetched=i.fetched, deleted=i.deleted, total=i.total_files, duplicate=i.duplicate, skip=i.skip, filterd=i.filtered, bot_id=bot_id)
    now = time.time()
    diff = int(now - i.start)
    speed = sts.divide(i.fetched, diff)
@@ -538,24 +566,25 @@ async def edit(user, msg, title, status, sts):
       button.append([InlineKeyboardButton('• ᴄᴀɴᴄᴇʟ', 'terminate_frwd')])
    await msg_edit(msg, text, InlineKeyboardMarkup(button))
 
-async def is_cancelled(client, user, msg, sts):
+async def is_cancelled(client, user, msg, sts, bot_id):
    if temp.CANCEL.get(user)==True:
       if sts.TO in temp.IS_FRWD_CHAT:
          temp.IS_FRWD_CHAT.remove(sts.TO)
-      await edit(user, msg, 'ᴄᴀɴᴄᴇʟʟᴇᴅ', "cancelled", sts)
+      await edit(user, msg, 'ᴄᴀɴᴄᴇʟʟᴇᴅ', "cancelled", sts, bot_id)
       await send(client, user, "<b>❌ ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴀɴᴄᴇʟʟᴇᴅ</b>")
-      await stop(client, user)
+      await stop_client(client, user, bot_id)
       return True 
    return False 
 
-async def stop(client, user):
+async def stop_client(client, user, bot_id=None):
    try:
      await client.stop()
    except:
      pass 
    await db.rmve_frwd(user)
    temp.forwardings -= 1
-   temp.lock[user] = False 
+   if bot_id:
+       temp.BOT_BUSY[bot_id] = False
 
 async def send(bot, user, text):
    try:
@@ -646,7 +675,6 @@ def retry_btn(id):
 @Client.on_callback_query(filters.regex(r'^terminate_frwd$'))
 async def terminate_frwding(bot, m):
     user_id = m.from_user.id 
-    temp.lock[user_id] = False
     temp.CANCEL[user_id] = True 
     await m.answer("Forwarding cancelled !", show_alert=True)
 
@@ -694,35 +722,50 @@ async def stop_forward(client, message):
     await asyncio.sleep(0.5)
     if not await db.is_forwad_exit(message.from_user.id):
         return await sts.edit('**No Ongoing Forwards To Cancel**')
-    temp.lock[user_id] = False
     temp.CANCEL[user_id] = True
     mst = await db.get_forward_details(user_id)
+    bot_id = mst.get('bot_id')
+    if bot_id:
+        temp.BOT_BUSY[bot_id] = False
     msg = await client.get_messages(user_id, mst['msg_id'])
-    link = f"tg://openmessage?user_id={6648261085}&message_id={mst['msg_id']}"
-    await sts.edit(f"<b>Successfully Canceled </b>", disable_web_page_preview=True)
+    await sts.edit(f"<b>Successfully Canceled</b>", disable_web_page_preview=True)
 
 async def restart_pending_forwads(bot, user):
-    user = user['user_id']
-    settings = await db.get_forward_details(user)
+    user_id = user['user_id']
+    settings = await db.get_forward_details(user_id)
+    bot_id = settings.get('bot_id')
+    
+    if bot_id is None:
+        # Try to get first enabled bot
+        bots = await db.get_bots(user_id)
+        for b in bots:
+            if b.get('enabled', True):
+                bot_id = b['bot_id']
+                break
+        if bot_id is None:
+            return await db.rmve_frwd(user_id)
+    
     try:
        skiping = settings['offset']
        fetch = settings['fetched'] - settings['skip']
        temp.forwardings += 1
-       forward_id = await store_vars(user)
+       forward_id = await store_vars(user_id, bot_id)
        sts = STS(forward_id)
        if settings['chat_id'] is None:
-           return await db.rmve_frwd(user)
+           return await db.rmve_frwd(user_id)
            temp.forwardings -= 1
        if not sts.verify():
-          temp.forwardings -=1
+          temp.forwardings -= 1
           return 
        sts.add('fetched', value=fetch)
        sts.add('duplicate', value=settings['duplicate'])
        sts.add('filtered', value=settings['filtered'])
        sts.add('deleted', value=settings['deleted'])
        sts.add('total_files', value=settings['total'])
-       m = await bot.get_messages(user, settings['msg_id'])
-       _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user)
+       m = await bot.get_messages(user_id, settings['msg_id'])
+       
+       # ============ GET BOT DATA USING BOT_ID ============
+       _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user_id, bot_id)
        i = sts.get(full=True)
        filter = datas['filters']
        max_size = datas['max_size']
@@ -734,7 +777,7 @@ async def restart_pending_forwads(bot, user):
        if keyword:
            for key in keyword:
                keywords += f"{key}|"
-           keywords  = keywords.rstrip("|")
+           keywords = keywords.rstrip("|")
        else:
            keywords = None
        if exten:
@@ -747,35 +790,38 @@ async def restart_pending_forwads(bot, user):
           return await msg_edit(m, "<code>You didn't added any bot. Please add a bot using /settings !</code>", wait=True)
        if _bot['is_bot'] == True:
           data = _bot['token']
+          is_bot_type = True
        else:
           data = _bot['session']
+          is_bot_type = False
        try:
-          il = True if _bot['is_bot'] == True else False
-          client = await get_client(data, is_bot=il)
+          client = await get_client(data, is_bot=is_bot_type)
           await client.start()
        except Exception as e:  
           return await m.edit(e)
        try:
           await msg_edit(m, "<code>processing..</code>")
        except:
-          return await db.rmve_frwd(user)
+          return await db.rmve_frwd(user_id)
        try: 
           await client.get_messages(sts.get("FROM"), sts.get("limit"))
        except:
           await msg_edit(m, f"**Source chat may be a private channel / group. Use userbot (user must be member over there) or  if Make Your [Bot](t.me/{_bot['username']}) an admin over there**", retry_btn(forward_id), True)
-          return await stop(client, user)
+          return await stop_client(client, user_id, bot_id)
        try:
           k = await client.send_message(i.TO, "Testing")
           await k.delete()
        except:
           await msg_edit(m, f"**Please Make Your [UserBot / Bot](t.me/{_bot['username']}) Admin In Target Channel With Full Permissions**", retry_btn(forward_id), True)
-          return await stop(client, user)
-    except:
-       return await db.rmve_frwd(user)
+          return await stop_client(client, user_id, bot_id)
+    except Exception as e:
+       print(f"Restart error: {e}")
+       return await db.rmve_frwd(user_id)
+    
     user_have_db = False
     dburi = datas['db_uri']
     if dburi is not None:
-        connected, user_db = await connect_user_db(user, dburi, i.TO)
+        connected, user_db = await connect_user_db(user_id, dburi, i.TO)
         if not connected:
             await msg_edit(m, "<code>Cannot Connected Your db Errors Found Dup files Have Been Skipped after Restart</code>")
         else:
@@ -794,7 +840,6 @@ async def restart_pending_forwads(bot, user):
         sleep = 3 if _bot['is_bot'] else 6
     
     temp.IS_FRWD_CHAT.append(i.TO)
-    temp.lock[user] = locked = True
     
     # TURBO SETTINGS
     turbo_count = datas.get('turbo_count', 20)
@@ -806,141 +851,140 @@ async def restart_pending_forwads(bot, user):
         old_files = await user_db.get_all_files()
         async for ofile in old_files:
             dup_files.append(ofile["file_unique_id"])
-    if locked:
-        try:
-          MSG = []
-          pling = 0
-          msg_counter = 0
-          link_remove = datas['link_remove']
-          replace_link = datas['replace_link']
-          await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
-          async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=skiping, filters=filter, max_size=max_size):
-                if await is_cancelled(client, user, m, sts):
-                    if user_have_db:
-                       await user_db.drop_all()
-                       await user_db.close()
-                       return
-                    return
+    
+    MSG = []
+    pling = 0
+    msg_counter = 0
+    link_remove = datas['link_remove']
+    replace_link = datas['replace_link']
+    await edit(user_id, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id)
+    
+    try:
+        async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=skiping, filters=filter, max_size=max_size):
+            if await is_cancelled(client, user_id, m, sts, bot_id):
+                if user_have_db:
+                    await user_db.drop_all()
+                    await user_db.close()
+                return
+            
+            # Reload config every 10 messages (live update)
+            msg_counter += 1
+            if msg_counter % 10 == 0:
+                new_datas = await reload_turbo_config(user_id, bot_id, datas)
+                if new_datas['turbo_count'] != turbo_count:
+                    turbo_count = new_datas['turbo_count']
+                if new_datas['turbo_sleep'] != turbo_sleep:
+                    turbo_sleep = new_datas['turbo_sleep']
+                if new_datas['forward_delay'] != forward_delay_cfg:
+                    forward_delay_cfg = new_datas['forward_delay']
+                    sleep = forward_delay_cfg if forward_delay_cfg > 0 else (3 if _bot['is_bot'] else 6)
+                datas = new_datas
+            
+            if pling % 20 == 0: 
+                await edit(user_id, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id)
+            pling += 1
+            sts.add('fetched')
+            
+            if message == "DUPLICATE":
+                sts.add('duplicate')
+                continue
+            elif message == "FILTERED":
+                sts.add('filtered')
+                continue 
+            elif message.empty or message.service:
+                sts.add('deleted')
+                continue
+            
+            if await should_filter_by_keywords(keywords, message):
+                sts.add('filtered')
+                continue
+            
+            if message.document and await extension_filter(extensions, message.document.file_name):
+                sts.add('filtered')
+                continue 
+            
+            if message.document and await size_filter(max_size, min_size, message.document.file_size):
+                sts.add('filtered')
+                continue 
+            
+            # Use file_unique_id for duplicate detection
+            file_unique_id_to_check = None
+            if message.document:
+                file_unique_id_to_check = message.document.file_unique_id
+            elif message.video:
+                file_unique_id_to_check = message.video.file_unique_id
+            elif message.photo:
+                file_unique_id_to_check = message.photo.file_unique_id
+            elif message.audio:
+                file_unique_id_to_check = message.audio.file_unique_id
+            elif message.animation:
+                file_unique_id_to_check = message.animation.file_unique_id
+            
+            if file_unique_id_to_check and file_unique_id_to_check in dup_files:
+                sts.add('duplicate')
+                continue
+            
+            if file_unique_id_to_check and datas['skip_duplicate']:
+                dup_files.append(file_unique_id_to_check)
+                if user_have_db:
+                    await user_db.add_file(file_unique_id_to_check)
+            
+            use_batch = forward_tag and not (link_remove or replace_link)
+            
+            if use_batch:
+                MSG.append(message.id)
+                notcompleted = len(MSG)
+                completed = sts.get('total') - sts.get('fetched')
+                if (notcompleted >= 100 or completed <= 100): 
+                    await forward(user_id, client, MSG, m, sts, protect)
+                    sts.add('total_files', notcompleted)
+                    
+                    if turbo_count > 0:
+                        turbo_counter += notcompleted
+                        if turbo_counter >= turbo_count:
+                            await turbo_sleep_with_status(user_id, m, sts, turbo_sleep, user_db if user_have_db else None)
+                            turbo_counter = 0
+                    
+                    await asyncio.sleep(10)
+                    MSG = []
+            else:
+                new_caption = modify_caption(message, caption, link_remove, replace_link)
+                details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
+                await copy(user_id, client, details, m, sts)
+                sts.add('total_files')
                 
-                # Reload config every 10 messages (live update)
-                msg_counter += 1
-                if msg_counter % 10 == 0:
-                    new_datas = await reload_turbo_config(user, datas)
-                    if new_datas['turbo_count'] != turbo_count:
-                        turbo_count = new_datas['turbo_count']
-                    if new_datas['turbo_sleep'] != turbo_sleep:
-                        turbo_sleep = new_datas['turbo_sleep']
-                    if new_datas['forward_delay'] != forward_delay_cfg:
-                        forward_delay_cfg = new_datas['forward_delay']
-                        sleep = forward_delay_cfg if forward_delay_cfg > 0 else (3 if _bot['is_bot'] else 6)
-                    datas = new_datas
+                if turbo_count > 0:
+                    turbo_counter += 1
+                    if turbo_counter >= turbo_count:
+                        await turbo_sleep_with_status(user_id, m, sts, turbo_sleep, user_db if user_have_db else None)
+                        turbo_counter = 0
                 
-                if pling %20 == 0: 
-                   await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts)
-                pling += 1
-                sts.add('fetched')
-                if message == "DUPLICATE":
-                   sts.add('duplicate')
-                   continue
-                elif message == "FILTERED":
-                   sts.add('filtered')
-                   continue 
-                elif message.empty or message.service:
-                   sts.add('deleted')
-                   continue
-                
-                if await should_filter_by_keywords(keywords, message):
-                    sts.add('filtered')
-                    continue
-                
-                if message.document and await extension_filter(extensions, message.document.file_name):
-                    sts.add('filtered')
-                    continue 
-                
-                if message.document and await size_filter(max_size, min_size, message.document.file_size):
-                    sts.add('filtered')
-                    continue 
-                
-                # Use file_unique_id for duplicate detection
-                file_unique_id_to_check = None
-                if message.document:
-                    file_unique_id_to_check = message.document.file_unique_id
-                elif message.video:
-                    file_unique_id_to_check = message.video.file_unique_id
-                elif message.photo:
-                    file_unique_id_to_check = message.photo.file_unique_id
-                elif message.audio:
-                    file_unique_id_to_check = message.audio.file_unique_id
-                elif message.animation:
-                    file_unique_id_to_check = message.animation.file_unique_id
-                
-                if file_unique_id_to_check and file_unique_id_to_check in dup_files:
-                    sts.add('duplicate')
-                    continue
-                
-                if file_unique_id_to_check and datas['skip_duplicate']:
-                    dup_files.append(file_unique_id_to_check)
-                    if user_have_db:
-                        await user_db.add_file(file_unique_id_to_check)
-                
-                use_batch = forward_tag and not (link_remove or replace_link)
-                
-                if use_batch:
-                   MSG.append(message.id)
-                   notcompleted = len(MSG)
-                   completed = sts.get('total') - sts.get('fetched')
-                   if ( notcompleted >= 100 
-                        or completed <= 100): 
-                      await forward(user, client, MSG, m, sts, protect)
-                      sts.add('total_files', notcompleted)
-                      
-                      if turbo_count > 0:
-                          turbo_counter += notcompleted
-                          if turbo_counter >= turbo_count:
-                              await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
-                              turbo_counter = 0
-                      
-                      await asyncio.sleep(10)
-                      MSG = []
-                else:
-                   new_caption = modify_caption(message, caption, link_remove, replace_link)
-                   details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
-                   await copy(user, client, details, m, sts)
-                   sts.add('total_files')
-                   
-                   if turbo_count > 0:
-                       turbo_counter += 1
-                       if turbo_counter >= turbo_count:
-                           await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
-                           turbo_counter = 0
-                   
-                   await asyncio.sleep(sleep) 
-        except Exception as e:
-            await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
-            if user_have_db:
-                await user_db.drop_all()
-                await user_db.close()
-            temp.IS_FRWD_CHAT.remove(sts.TO)
-            return await stop(client, user)
-        temp.IS_FRWD_CHAT.remove(sts.TO)
-        await send(client, user, "<b>🎉 ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
+                await asyncio.sleep(sleep) 
+    except Exception as e:
+        await msg_edit(m, f'<b>ERROR:</b>\n<code>{e}</code>', wait=True)
         if user_have_db:
             await user_db.drop_all()
             await user_db.close()
-        await edit(user, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts) 
-        await stop(client, user)
+        temp.IS_FRWD_CHAT.remove(sts.TO)
+        return await stop_client(client, user_id, bot_id)
+    
+    temp.IS_FRWD_CHAT.remove(sts.TO)
+    await send(client, user_id, "<b>🎉 ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
+    if user_have_db:
+        await user_db.drop_all()
+        await user_db.close()
+    await edit(user_id, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts, bot_id) 
+    await stop_client(client, user_id, bot_id)
 
-async def store_vars(user_id):
+async def store_vars(user_id, bot_id):
     settings = await db.get_forward_details(user_id)
     fetch = settings['fetched']
     forward_id = f'{user_id}-{fetch}'
-    print(fetch)
-    STS(id=forward_id).store(settings['chat_id'], settings['toid'], settings['skip'], settings['limit'])
+    STS(id=forward_id).store(settings['chat_id'], settings['toid'], settings['skip'], settings['limit'], bot_id)
     return forward_id
 
 async def restart_forwards(client):
     users = await db.get_all_frwd()
-    count = await db.forwad_count()
     tasks = []
     async for user in users:
         tasks.append(restart_pending_forwads(client, user))
@@ -950,7 +994,7 @@ async def restart_forwards(client):
     await asyncio.gather(*tasks)
     print('Done')
 
-async def update_forward(user_id, chat_id, start_time, toid, last_id, limit, forward_id, msg_id, fetched, total, duplicate, deleted, skip, filterd):
+async def update_forward(user_id, chat_id, start_time, toid, last_id, limit, forward_id, msg_id, fetched, total, duplicate, deleted, skip, filterd, bot_id=None):
     details = {
         'chat_id': chat_id,
         'toid': toid,
@@ -965,7 +1009,8 @@ async def update_forward(user_id, chat_id, start_time, toid, last_id, limit, for
         'total': total,
         'duplicate': duplicate,
         'skip': skip,
-        'filtered': filterd
+        'filtered': filterd,
+        'bot_id': bot_id
     }
     await db.update_forward(user_id, details)
 
