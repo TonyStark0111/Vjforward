@@ -69,7 +69,9 @@ class STS:
         filters = await db.get_filters(user_id, bot_id)
         size = configs.get('min_size', 0)
         max_size = configs.get('max_size', 0)
-        button = parse_buttons(configs.get('button', ''))
+        
+        # 🔥 FIX: convert button to string to avoid TypeError
+        button = parse_buttons(str(configs.get('button', '')))
         
         return bot, configs.get('caption'), configs.get('forward_tag'), {
             'filters': filters,
