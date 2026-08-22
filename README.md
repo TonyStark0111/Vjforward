@@ -1,7 +1,7 @@
-# Xeon Forward Bot v5 – Multi-Bot Edition
+# VJ Forward Bot v5 – Multi-Bot Edition
 
 <p align="center">
-  <img src="https://readme-typing-svg.herokuapp.com/?lines=Welcome+To+Xeon+Forward+Bot+!&center=true&width=380&height=45">
+  <img src="https://readme-typing-svg.herokuapp.com/?lines=Welcome+To+VJ+Forward+Bot+!&center=true&width=380&height=45">
 </p>
 
 ---
@@ -42,7 +42,8 @@
 
 ---
 
-## ⚙️ Commands
+<details>
+<summary><b>⚙️ Commands</b> (click to expand)</summary>
 
 | Command | Description |
 |---------|-------------|
@@ -56,9 +57,12 @@
 | `/resetall` | Reset all users' settings (owner only) |
 | `/broadcast` | Broadcast a message to all users (owner only) |
 
+</details>
+
 ---
 
-## 📋 How to Use
+<details>
+<summary><b>📋 How to Use</b> (click to expand)</summary>
 
 ### 1. Add Your Bots
 - Go to `/settings` → **Bots** → Add Bot / Add Userbot
@@ -83,21 +87,12 @@
   - Link removal, Replacement link
   - Forward delay, Turbo mode
 
----
-
-## 🚨 Important Notes
-
-> **Userbot Limitation** – Only **one userbot** can be added per user. The userbot, like any other bot, can run only **one forward at a time**. If you try to start another forward with the same userbot while it's busy, you'll get a warning.
-
-> **Bot Concurrency** – You can run **multiple forwards simultaneously** as long as you use **different bots** (e.g., Bot1 and Bot2). The system prevents the same bot from running more than one forward.
-
-> **Private Channels** – If your bot is **admin** in a private source channel, it will work without a userbot. Only when the bot cannot access the chat (e.g., not admin, not a member), the system will fall back to your userbot (if available).
-
-> **Migration** – Existing users' bots are automatically migrated to the new multi-bot structure on first startup. No data loss.
+</details>
 
 ---
 
-## 🛠️ Variables
+<details>
+<summary><b>🛠️ Variables</b> (click to expand)</summary>
 
 | Variable | Description |
 |----------|-------------|
@@ -107,9 +102,12 @@
 | `BOT_OWNER` | Telegram user ID of the owner (for owner commands) |
 | `DATABASE_URI` | MongoDB URI (get from [MongoDB](https://mongodb.com)) |
 
+</details>
+
 ---
 
-## 🚀 Deployment
+<details>
+<summary><b>🚀 Deployment Methods</b> (click to expand)</summary>
 
 ### Deploy to Heroku
 [![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/Codeflix-Bots/FileStore)
