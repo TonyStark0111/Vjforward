@@ -5,13 +5,13 @@
 from os import environ 
 
 class Config:
-    API_ID = int(environ.get("API_ID", "30128415"))
-    API_HASH = environ.get("API_HASH", "7e02885160c39ed21e7b2a76ad625dd2")
+    API_ID = int(environ.get("API_ID", "30547492"))
+    API_HASH = environ.get("API_HASH", "a280560d62503a8bdca8642fa9eb26bf")
     BOT_TOKEN = environ.get("BOT_TOKEN", "") 
     BOT_SESSION = environ.get("BOT_SESSION", "vjbot") 
-    DATABASE_URI = environ.get("DATABASE_URI", "mongodb+srv://XZonebot1:XZonebot1@cluster0.wlxgww7.mongodb.net/?appName=Cluster0")
+    DATABASE_URI = environ.get("DATABASE_URI", "mongodb+srv://Leechbot1:Leechbot1@cluster0.5cvmpxp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
     DATABASE_NAME = environ.get("DATABASE_NAME", "testing")
-    BOT_OWNER = int(environ.get("BOT_OWNER", "8365451390"))
+    BOT_OWNER = int(environ.get("BOT_OWNER", "8424998621"))
     LINK_REMOVE_FORWD = environ.get("LINK_REMOVE_FORWD", "True") == "True"
 
 
