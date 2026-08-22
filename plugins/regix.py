@@ -185,10 +185,6 @@ async def pub_(bot, message):
     temp.CANCEL[user] = False
     frwd_id = message.data.split("_")[2]
     
-    # ============ REMOVED USER LOCK CHECK ============
-    # REMOVED: if temp.lock.get(user) and str(temp.lock.get(user))=="True":
-    # REMOVED: return await message.answer("please wait until previous task complete", show_alert=True)
-    
     sts = STS(frwd_id)
     if not sts.verify():
       await message.answer("your are clicking on my old button", show_alert=True)
@@ -223,23 +219,8 @@ async def pub_(bot, message):
         temp.BOT_BUSY[bot_id] = False
         return await msg_edit(m, "<code>You didn't added any bot. Please add a bot using /settings !</code>", wait=True)
     
-    # ============ FIX: Force userbot for private channels ============
-    source_chat_id = sts.get("FROM")
-    is_private_channel = isinstance(source_chat_id, int) and source_chat_id < 0
-    
-    if is_private_channel:
-        userbots = await db.get_bots(user, is_bot=False)
-        userbot = next((u for u in userbots if u.get('enabled', True)), None)
-        if userbot:
-            if _bot and _bot.get('is_bot', True):
-                _bot = userbot
-                bot_id = userbot['bot_id']
-                _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user, bot_id)
-                await msg_edit(m, "<code>Private channel detected. Using your userbot...</code>")
-        else:
-            await msg_edit(m, "<code>Private channel detected but no userbot enabled. Please add a userbot in /settings</code>", wait=True)
-            temp.BOT_BUSY[bot_id] = False
-            return await stop_client(None, user, bot_id)
+    # ============ NO PRIVATE-CHANNEL PRE-CHECK ============
+    # The bot will try to access the channel, and if it fails, it will handle it below
     
     filter = datas['filters']
     max_size = datas['max_size']
