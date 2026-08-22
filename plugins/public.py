@@ -20,7 +20,8 @@ async def run(bot, message):
     
     # ============ BOT SELECTION ============
     all_bots = await db.get_bots(user_id)
-    enabled_bots = [b for b in all_bots if b.get('enabled', True)]
+    # 🔥 FILTER: only keep bots that have 'bot_id' field (migrated)
+    enabled_bots = [b for b in all_bots if b.get('enabled', True) and b.get('bot_id') is not None]
     
     if not enabled_bots:
         return await message.reply("<code>You don't have any enabled bots. Please add a bot using /settings</code>")
@@ -54,6 +55,10 @@ async def run(bot, message):
         if selected_bot is None:
             return await message.reply("Selection timed out or cancelled.")
         temp.BOT_SELECTION.pop(user_id, None)
+    
+    # 🔥 Ensure selected_bot has bot_id
+    if not selected_bot or selected_bot.get('bot_id') is None:
+        return await message.reply("Invalid bot selected. Please try again.")
     
     bot_id = selected_bot['bot_id']
     is_bot = selected_bot['is_bot']
@@ -123,7 +128,8 @@ async def run(bot, message):
     except (ChannelPrivate, PrivateChat, ChannelInvalid) as e:
         # Selected bot cannot access – try userbot (if available)
         userbots = await db.get_bots(user_id, is_bot=False)
-        userbot = next((u for u in userbots if u.get('enabled', True)), None)
+        # Filter userbots with bot_id
+        userbot = next((u for u in userbots if u.get('enabled', True) and u.get('bot_id') is not None), None)
         if userbot:
             try:
                 client = await get_client(userbot['session'], is_bot=False)
