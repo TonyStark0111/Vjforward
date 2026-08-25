@@ -17,13 +17,15 @@ class STS:
         return self.data.get(self.id)
 
     def store(self, From, to, skip, limit, bot_id=None):
+        # If skip is 0, we start from the beginning (message 1)
+        # fetched should be 0 because we haven't fetched anything yet
         self.data[self.id] = {
             "FROM": From,
             'TO': to,
             'total_files': 0,
             'skip': skip,
             'limit': limit,
-            'fetched': skip,
+            'fetched': skip if skip > 0 else 0,  # If skip=0, start from 0 fetched
             'filtered': 0,
             'deleted': 0,
             'duplicate': 0,
