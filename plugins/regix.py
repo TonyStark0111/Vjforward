@@ -94,7 +94,7 @@ def get_keyword_content(message):
             content_list.append(message.caption)
     elif message.voice:
         if message.caption:
-            content_list.append(message.caption)
+            content_list.append(message.voice.caption)
     elif message.sticker:
         if message.sticker.emoji:
             content_list.append(message.sticker.emoji)
@@ -341,7 +341,12 @@ async def pub_(bot, message):
     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id)
     
     try:
-        async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=sts.get("skip"), filters=filter, max_size=max_size):
+        # Get the offset - if skip is 0, start from message 1
+        offset = sts.get("skip")
+        if offset == 0:
+            offset = 1  # Start from first message
+        
+        async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=offset, filters=filter, max_size=max_size):
             if await is_cancelled(client, user, m, sts, bot_id):
                 if user_have_db:
                     await user_db.drop_all()
@@ -688,7 +693,7 @@ async def status_msg(bot, msg):
         total = sts.get('limit') - sts.get('fetched')
         time_to_comple = await complete_time(total)
         est_time = est_time if (est_time != '' or status not in ['completed', 'cancelled']) else '0 s'
-        await msg.answer(PROGRESS.format(percentage, fetched, forwarded, remaining, status, time_to_comple, uptime), show_alert=True)
+        await msg.answer(Script.PROGRESS.format(percentage, fetched, forwarded, remaining, status, time_to_comple, uptime), show_alert=True)
     except Exception as e:
         await msg.answer(f"Status: Forwarding in progress", show_alert=True)
 
@@ -890,7 +895,12 @@ async def restart_pending_forwads(bot, user):
         pass
     
     try:
-        async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=skiping, filters=filter, max_size=max_size):
+        # Get the offset - if skip is 0, start from message 1
+        offset = sts.get("skip")
+        if offset == 0:
+            offset = 1  # Start from first message
+        
+        async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=offset, filters=filter, max_size=max_size):
             if await is_cancelled(client, user_id, m, sts, bot_id):
                 if user_have_db:
                     await user_db.drop_all()
