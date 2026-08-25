@@ -149,13 +149,13 @@ async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None, bot
         if temp.CANCEL.get(user, False):
             return
         i = sts.get(full=True)
-        if i.total > 0:
-            percentage = "{:.0f}".format(float(i.fetched) * 100 / float(i.total))
-        else:
-            percentage = "0"
+        percentage = "{:.1f}".format(float(i.fetched)*100/float(i.total)) if i.total > 0 else "0.0"
         status_text = f"sleeping {remaining} s"
+
+        # ⭐ NO progress bar in status text
+        bot_display = bot_link or "Unknown Bot"
         text = TEXT.format(
-            bot=bot_link or "Unknown Bot",
+            bot=bot_display,
             fetched=i.fetched,
             forwarded=i.total_files,
             duplicate=i.duplicate,
@@ -164,12 +164,16 @@ async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None, bot
             filtered=i.filtered,
             status=status_text,
             eta="0 s",
-            percentage=percentage,
             title="ᴘʀᴏɢʀᴇssɪɴɢ"
         )
-        progress = "●{0}{1}".format(
-            ''.join(["●" for _ in range(math.floor(int(percentage) / 4))]),
-            ''.join(["○" for _ in range(24 - math.floor(int(percentage) / 4))]))
+        
+        # ⭐ BUTTON ONLY - progress bar with percentage
+        perc = float(percentage)
+        total_blocks = 15
+        filled = int(round(perc / 100 * total_blocks))
+        empty = total_blocks - filled
+        progress = "■" * filled + "□" * empty + f" • {percentage}%"
+        
         button = [[InlineKeyboardButton(progress, f'fwrdstatus#sleep#{remaining}#{percentage}#{sts.id}')]]
         button.append([InlineKeyboardButton('• ᴄᴀɴᴄᴇʟ', 'terminate_frwd')])
         await msg_edit(m, text, InlineKeyboardMarkup(button))
@@ -555,7 +559,7 @@ async def msg_edit(msg, text, button=None, wait=None):
 async def edit(user, msg, title, status, sts, bot_id, bot_link=None):
    i = sts.get(full=True)
    status = 'Forwarding' if status == 5 else f"sleeping {status} s" if str(status).isnumeric() else status
-   percentage = "{:.0f}".format(float(i.fetched)*100/float(i.total)) if i.total > 0 else "0"
+   percentage = "{:.1f}".format(float(i.fetched)*100/float(i.total)) if i.total > 0 else "0.0"
    
    now = time.time()
    diff = int(now - i.start)
@@ -566,9 +570,8 @@ async def edit(user, msg, title, status, sts, bot_id, bot_link=None):
    if status in ["cancelled", "completed"]:
        eta = "0 s"
    
-   # ⭐ USE BOT_LINK IN STATUS ⭐
+   # ⭐ NO progress bar in status text
    bot_display = bot_link or "Unknown Bot"
-   
    text = TEXT.format(
        bot=bot_display,
        fetched=i.fetched,
@@ -579,25 +582,23 @@ async def edit(user, msg, title, status, sts, bot_id, bot_link=None):
        filtered=i.filtered,
        status=status,
        eta=eta,
-       percentage=percentage,
        title=title
    )
    
    await update_forward(user_id=user, last_id=None, start_time=i.start, limit=i.limit, chat_id=i.FROM, toid=i.TO, forward_id=None, msg_id=msg.id, fetched=i.fetched, deleted=i.deleted, total=i.total_files, duplicate=i.duplicate, skip=i.skip, filterd=i.filtered, bot_id=bot_id)
-   now = time.time()
-   diff = int(now - i.start)
-   speed = sts.divide(i.fetched, diff)
-   elapsed_time = round(diff) * 1000
-   time_to_completion = round(sts.divide(i.total - i.fetched, int(speed))) * 1000
-   estimated_total_time = elapsed_time + time_to_completion  
-   progress = "●{0}{1}".format(
-       ''.join(["●" for i in range(math.floor(int(percentage) / 4))]),
-       ''.join(["○" for i in range(24 - math.floor(int(percentage) / 4))]))
-   button =  [[InlineKeyboardButton(progress, f'fwrdstatus#{status}#{estimated_total_time}#{percentage}#{i.id}')]]
-   estimated_total_time = TimeFormatter(milliseconds=estimated_total_time)
+   
+   # ⭐ BUTTON ONLY - progress bar with percentage
+   perc = float(percentage)
+   total_blocks = 15
+   filled = int(round(perc / 100 * total_blocks))
+   empty = total_blocks - filled
+   progress = "■" * filled + "□" * empty + f" • {percentage}%"
+   
+   button = [[InlineKeyboardButton(progress, f'fwrdstatus#{status}#{remaining_ms}#{percentage}#{i.id}')]]
+   estimated_total_time = TimeFormatter(milliseconds=remaining_ms)
    estimated_total_time = estimated_total_time if estimated_total_time != '' else '0 s'
    if status in ["cancelled", "completed"]:
-      button.append([InlineKeyboardButton('• ᴄᴏᴍᴘʟᴇᴛᴇᴅ ​•', url='https://t.me/VJ_BOTZ')])
+      button.append([InlineKeyboardButton('• ᴄᴏᴍᴘʟᴇᴛᴇᴅ ​•', url='https://t.me/MrXeontg')])
    else:
       button.append([InlineKeyboardButton('• ᴄᴀɴᴄᴇʟ', 'terminate_frwd')])
    await msg_edit(msg, text, InlineKeyboardMarkup(button))
