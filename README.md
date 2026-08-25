@@ -1,4 +1,4 @@
-# XEON Forward Bot v5 – Multi-Bot Edition
+# XEON Forward Bot v6 – Multi-Bot Edition
 
 <p align="center">
   <img src="https://readme-typing-svg.herokuapp.com/?lines=Welcome+To+Xeon+Forward+Bot+!&center=true&width=380&height=45">
