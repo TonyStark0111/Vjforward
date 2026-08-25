@@ -103,7 +103,7 @@ Send /cancel to cancel."""
   
     SETTINGS_TXT = """<b>change your settings as your wish</b>"""
   
-    # ⭐ UPDATED STATUS TEXT WITH BOT NAME ⭐
+    # ⭐ STATUS TEXT - NO PROGRESS BAR (only on button) ⭐
     TEXT = """
 ╔════❰ ғᴏʀᴡᴀʀᴅ sᴛᴀᴛᴜs  ❱═❍⊱❁۪۪
 ║╭━━━━━━━━━━━━━━━➣
@@ -124,8 +124,6 @@ Send /cancel to cancel."""
 ║┣⪼📊 Cᴜʀʀᴇɴᴛ Sᴛᴀᴛᴜs: {status}
 ║┃
 ║┣⪼⌛ ETA: {eta}
-║┃
-║┣⪼𖨠 Pᴇʀᴄᴇɴᴛᴀɢᴇ: {percentage} %
 ║╰━━━━━━━━━━━━━━━➣ 
 ╚════❰ {title} ❱══❍⊱❁۪۪
 """
