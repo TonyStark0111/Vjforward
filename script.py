@@ -2,22 +2,22 @@ import os
 from config import Config
 
 class Script(object):
-    START_TXT = """<b>Hᴇʏ {} !
-    
-I'ᴍ ᴀ ᴀᴅᴠᴀɴᴄᴇᴅ ғᴏʀᴡᴀʀᴅɪɴɢ Bᴏᴛ
-I ᴄᴀɴ ғᴏʀᴡᴀʀᴅ ᴀʟʟ ᴍᴇssᴀɢᴇs ғʀᴏᴍ ᴏɴᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴀɴᴏᴛʜᴇʀ ᴄʜᴀɴɴᴇʟ</b>
-
-**Cʟɪᴄᴋ Hᴇʟᴘ Bᴜᴛᴛᴏɴ ᴛᴏ ᴋɴᴏᴡ ᴍᴏʀᴇ ᴀʙᴏᴜᴛ ᴍᴇ**"""
+  START_TXT = """<b>ʜɪ {}
   
-    HELP_TXT = """<b><u>🔶 Help</b></u>
+ɪ'ᴍ ᴀ ᴀᴅᴠᴀɴᴄᴇᴅ ꜰᴏʀᴡᴀʀᴅ ʙᴏᴛ
+ɪ ᴄᴀɴ ꜰᴏʀᴡᴀʀᴅ ᴀʟʟ ᴍᴇssᴀɢᴇ ꜰʀᴏᴍ ᴏɴᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴀɴᴏᴛʜᴇʀ ᴄʜᴀɴɴᴇʟ</b>
+
+**ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ ᴛᴏ ᴋɴᴏᴡ ᴍᴏʀᴇ ᴀʙᴏᴜᴛ ᴍᴇ**"""
+  
+  HELP_TXT = """<b><u>🔆 Help</b></u>
 
 <u>**📚 Available commands:**</u>
 <b>⏣ __/start - check I'm alive__ 
 ⏣ __/forward - forward messages__
 ⏣ __/settings - configure your settings__
-⏣ __/unequify - delete duplicate media messages in chats__
-⏣ __/stop - stop your ongoing tasks__
-⏣ __/reset - reset your settings__</b>
+⏣ __ /unequify - delete duplicate media messages in chats__
+⏣ __ /stop - stop your ongoing tasks__
+⏣ __ /reset - reset your settings__</b>
 
 <b><u>💢 Features:</b></u>
 <b>► __Forward message from public channel to your channel without admin permission. if the channel is private need admin permission, if you can't give admin permission then use userbot, but in userbot there is a chance to get your account ban so use fake account__
@@ -32,33 +32,33 @@ I ᴄᴀɴ ғᴏʀᴡᴀʀᴅ ᴀʟʟ ᴍᴇssᴀɢᴇs ғʀᴏᴍ ᴏɴᴇ ᴄ�
 ► __Send a message link - Start from that message__
 ► __Forward a message - Start from that message__</b>"""
   
-    HOW_USE_TXT = """<b><u>⚠️ Before Forwarding:</b></u>
+  HOW_USE_TXT = """<b><u>⚠️ Before Forwarding:</b></u>
 <b>► __add a bot or userbot__
 ► __add atleast one to channel__ `(your bot/userbot must be admin in there)`
 ► __You can add chats or bots by using /settings__
 ► __if the **From Channel** is private your userbot must be member in there or your bot must need admin permission in there also__
 ► __Then use /forward to forward messages__
 
-► Hᴏᴡ ᴛᴏ ᴜsᴇ ᴍᴇ [Tᴜᴛᴏʀɪᴀʟ Vɪᴅᴇᴏ](https://youtu.be/wO1FE-lf35I)</b>"""
+► ʜᴏᴡ ᴛᴏ ᴜsᴇ ᴍᴇ [ᴛᴜᴛᴏʀɪᴀʟ ᴠɪᴅᴇᴏ](https://youtu.be/wO1FE-lf35I)</b>"""
   
-    ABOUT_TXT = """<b>
-╔════❰ Fᴏʀᴡᴀʀᴅɪɴɢ Bᴏᴛ ❱═❍⊱❁۪۪
+  ABOUT_TXT = """<b>
+╔════❰ ғᴏʀᴡᴀʀᴅ ʙᴏᴛ ❱═❍⊱❁۪۪
 ║╭━━━━━━━━━━━━━━━➣
-║┣⪼📃Bᴏᴛ : [Fᴏʀᴡᴀʀᴅɪɴɢ Bᴏᴛ](https://t.me/VJForwardBot)
-║┣⪼👨‍💻Cʀᴇᴀᴛᴏʀ : [Kɪɴɢ VJ 👑](https://t.me/kingvj01)
+║┣⪼📃ʙᴏᴛ : [Fᴏʀᴡᴀʀᴅ Bᴏᴛ](https://t.me/VJForwardBot)
+║┣⪼👦Cʀᴇᴀᴛᴏʀ : [Kɪɴɢ VJ 👑](https://t.me/kingvj01)
 ║┣⪼🤖Uᴘᴅᴀᴛᴇ : [VJ Bᴏᴛᴢ](https://t.me/vj_botz)
-║┣⪼📡Hᴏsᴛᴇᴅ ᴏɴ : Sᴜʙᴇʀ Fᴀsᴛ
+║┣⪼📡Hᴏsᴛᴇᴅ ᴏɴ : Sᴜᴘᴇʀ Fᴀsᴛ
 ║┣⪼🗣️Lᴀɴɢᴜᴀɢᴇ : Pʏᴛʜᴏɴ3
 ║┣⪼📚Lɪʙʀᴀʀʏ : Pʏʀᴏɢʀᴀᴍ Gᴀᴛʜᴇʀ 2.11.0 
-║┣⪼🖊️Vᴇʀsɪᴏɴ : 0.18.3
-║╰━━━━━━━━━━━━━━━➣ 
-╚════❰ ᴀʙᴏᴜᴛ ❱══❍⊱❁۪۪
+║┣⪼🗒️Vᴇʀsɪᴏɴ : 0.18.3
+║╰━━━━━━━━━━━━━━━➣
+╚══════════════════❍⊱❁۪۪
 </b>"""
   
-    STATUS_TXT = """
-╔════❰ Bᴏᴛ sᴛᴀᴛᴜs  ❱═❍⊱❁۪۪
+  STATUS_TXT = """
+╔════❰ ʙᴏᴛ sᴛᴀᴛᴜs  ❱═❍⊱❁۪۪
 ║╭━━━━━━━━━━━━━━━➣
-║┣⪼**⏳ Bᴏᴛ ᴜᴘᴛɪᴍᴇ:**`{}`
+║┣⪼**⏳ ʙᴏᴛ ᴜᴘᴛɪᴍᴇ:**`{}`
 ║┃
 ║┣⪼**👱 Tᴏᴛᴀʟ Usᴇʀs:** `{}`
 ║┃
@@ -66,14 +66,14 @@ I ᴄᴀɴ ғᴏʀᴡᴀʀᴅ ᴀʟʟ ᴍᴇssᴀɢᴇs ғʀᴏᴍ ᴏɴᴇ ᴄ�
 ║┃
 ║┣⪼**🔃 Fᴏʀᴡᴀʀᴅɪɴɢs:** `{}`
 ║┃
-║╰━━━━━━━━━━━━━━━➣ 
-╚═══════════════════❍⊱❁۪۪
+║╰━━━━━━━━━━━━━━━➣
+╚══════════════════❍⊱❁۪۪
 """
   
-    FROM_MSG = "<b>❮ SET SOURCE CHAT ❯\n\nForward the last message or last message link of source chat.\n/cancel - cancel this process</b>"
-    TO_MSG = "<b>❮ CHOOSE TARGET CHAT ❯\n\nChoose your target chat from the given buttons.\n/cancel - Cancel this process</b>"
+  FROM_MSG = "<b>❪ SET SOURCE CHAT ❫\n\nForward the last message or last message link of source chat.\n/cancel - cancel this process</b>"
+  TO_MSG = "<b>❪ CHOOSE TARGET CHAT ❫\n\nChoose your target chat from the given buttons.\n/cancel - Cancel this process</b>"
   
-    START_POINT_MSG = """<b>❮ SET STARTING POINT ❯</b>
+  START_POINT_MSG = """<b>❪ SET STARTING POINT ❫</b>
 
 Now specify where to start forwarding. You can:
 • Send <b>0</b> to start from the very first message
@@ -84,11 +84,11 @@ Now specify where to start forwarding. You can:
 The bot will forward from that point up to the last message you set.
 Send /cancel to cancel."""
   
-    CANCEL = "<b>Process Cancelled Successfully !</b>"
-    BOT_DETAILS = "<b><u>📄 BOT DETAILS</b></u>\n\n<b>➣ NAME:</b> <code>{}</code>\n<b>➣ BOT ID:</b> <code>{}</code>\n<b>➣ USERNAME:</b> @{}"
-    USER_DETAILS = "<b><u>📄 USERBOT DETAILS</b></u>\n\n<b>➣ NAME:</b> <code>{}</code>\n<b>➣ USER ID:</b> <code>{}</code>\n<b>➣ USERNAME:</b> @{}"  
+  CANCEL = "<b>Process Cancelled Successfully !</b>"
+  BOT_DETAILS = "<b><u>📄 BOT DETAILS</b></u>\n\n<b>➣ NAME:</b> <code>{}</code>\n<b>➣ BOT ID:</b> <code>{}</code>\n<b>➣ USERNAME:</b> @{}"
+  USER_DETAILS = "<b><u>📄 USERBOT DETAILS</b></u>\n\n<b>➣ NAME:</b> <code>{}</code>\n<b>➣ USER ID:</b> <code>{}</code>\n<b>➣ USERNAME:</b> @{}"  
   
-    DOUBLE_CHECK = """<b><u>DOUBLE CHECKING ⚠️</b></u>
+  DOUBLE_CHECK = """<b><u>DOUBLE CHECKING ⚠️</b></u>
 <code>Before forwarding the messages Click the Yes button only after checking the following</code>
 
 <b>★ YOUR BOT:</b> [{botname}](t.me/{botuname})
@@ -97,48 +97,47 @@ Send /cancel to cancel."""
 <b>★ START MSG ID:</b> `{start_id}`
 
 <i>° [{botname}](t.me/{botuname}) must be admin in **TARGET CHAT**</i> (`{to_chat}`)
-<i>° If the **SOURCE CHAT** is private your userbot must be member or your bot must be admin in there also</i>
+<i>° If the **SOURCE CHAT** is private your userbot must be member or your bot must be admin in there also</b></i>
 
 <b>If the above is checked then the yes button can be clicked</b>"""
   
-    SETTINGS_TXT = """<b>change your settings as your wish</b>"""
+  SETTINGS_TXT = """<b>change your settings as your wish</b>"""
   
-    # ⭐ STATUS TEXT - NO PROGRESS BAR (only on button) ⭐
-    TEXT = """
+  TEXT = """
 ╔════❰ ғᴏʀᴡᴀʀᴅ sᴛᴀᴛᴜs  ❱═❍⊱❁۪۪
 ║╭━━━━━━━━━━━━━━━➣
-║┣⪼🤖 BOT: {bot}
+║┣⪼<b>🕵 ғᴇᴄʜᴇᴅ Msɢ :</b> <code>{}</code>
 ║┃
-║┣⪼🕵 ғᴇᴄʜᴇᴅ Msɢ : {fetched}
+║┣⪼<b>✅ sᴜᴄᴄᴇғᴜʟʟʏ Fᴡᴅ :</b> <code>{}</code>
 ║┃
-║┣⪼✅ sᴜᴄᴄᴇғᴜʟʟʏ Fᴡᴅ : {forwarded}
+║┣⪼<b>👥 ᴅᴜᴘʟɪᴄᴀᴛᴇ Msɢ :</b> <code>{}</code>
 ║┃
-║┣⪼👥 ᴅᴜᴘʟɪᴄᴀᴛᴇ Msɢ : {duplicate}
+║┣⪼<b>🗑 ᴅᴇʟᴇᴛᴇᴅ Msɢ :</b> <code>{}</code>
 ║┃
-║┣⪼🗑 ᴅᴇʟᴇᴛᴇᴅ Msɢ : {deleted}
+║┣⪼<b>🪆 Sᴛᴀʀᴛ Msɢ ID :</b> <code>{}</code>
 ║┃
-║┣⪼🪆 Sᴋɪᴘᴘᴇᴅ Msɢ : {skip}
+║┣⪼<b>🔁 Fɪʟᴛᴇʀᴇᴅ Msɢ :</b> <code>{}</code>
 ║┃
-║┣⪼🔁 Fɪʟᴛᴇʀᴇᴅ Msɢ : {filtered}
+║┣⪼<b>📊 Cᴜʀʀᴇɴᴛ Sᴛᴀᴛᴜs:</b> <code>{}</code>
 ║┃
-║┣⪼📊 Cᴜʀʀᴇɴᴛ Sᴛᴀᴛᴜs: {status}
+║┣⪼<b>⌛ ETA:</b> <code>{}</code>
 ║┃
-║┣⪼⌛ ETA: {eta}
+║┣⪼<b>𖨠 Pᴇʀᴄᴇɴᴛᴀɢᴇ:</b> <code>{}</code> %
 ║╰━━━━━━━━━━━━━━━➣ 
-╚════❰ {title} ❱══❍⊱❁۪۪
+╚════❰ {} ❱══❍⊱❁۪۪
 """
   
-    DUPLICATE_TEXT = """
+  DUPLICATE_TEXT = """
 ╔════❰ ᴜɴᴇǫᴜɪғʏ sᴛᴀᴛᴜs ❱═❍⊱❁۪۪
 ║╭━━━━━━━━━━━━━━━➣
 ║┣⪼ <b>ғᴇᴛᴄʜᴇᴅ ғɪʟᴇs:</b> <code>{}</code>
 ║┃
 ║┣⪼ <b>ᴅᴜᴘʟɪᴄᴀᴛᴇ ᴅᴇʟᴇᴛᴇᴅ:</b> <code>{}</code> 
-║╰━━━━━━━━━━━━━━━➣ 
+║╰━━━━━━━━━━━━━━━➣
 ╚════❰ {} ❱══❍⊱❁۪۪
 """
   
-    PROGRESS = """
+  PROGRESS = """
 ╔════❰ ᴘʀᴏɢʀᴇss sᴛᴀᴛᴜs ❱═❍⊱❁۪۪
 ║╭━━━━━━━━━━━━━━━➣
 ║┣⪼ <b>📊 Pᴇʀᴄᴇɴᴛᴀɢᴇ:</b> <code>{}%</code>
@@ -154,6 +153,6 @@ Send /cancel to cancel."""
 ║┣⪼ <b>⏱️ Tɪᴍᴇ Lᴇғᴛ:</b> <code>{}</code>
 ║┃
 ║┣⪼ <b>🕐 Uᴘᴛɪᴍᴇ:</b> <code>{}</code>
-║╰━━━━━━━━━━━━━━━➣ 
-╚═══════════════════❍⊱❁۪۪
+║╰━━━━━━━━━━━━━━━➣
+╚══════════════════❍⊱❁۪۪
 """
