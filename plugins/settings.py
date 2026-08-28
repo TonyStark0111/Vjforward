@@ -446,6 +446,46 @@ async def settings_query(bot, query):
         "<b><u>📦 Exᴛʀᴀ Sᴇᴛᴛɪɴɢs</b></u>",
         reply_markup=await extra_buttons(user_id, bot_id))
   
+  # ============ FILE SIZE LIMITS ============
+  elif action.startswith("file_size_"):
+     await size_settings(bot, query)
+  
+  elif action.startswith("maxfile_size_"):
+     await maxsize_settings(bot, query)
+  
+  elif action.startswith("update_size_"):
+     await update_size(bot, query)
+  
+  elif action.startswith("maxupdate_size_"):
+     await update_maxsize(bot, query)
+  
+  # ============ KEYWORDS ============
+  elif action.startswith("get_keyword_"):
+     await get_keyword(bot, query)
+  
+  elif action.startswith("add_keyword_"):
+     await add_keyword(bot, query)
+  
+  elif action.startswith("rmve_all_keyword_"):
+     await rmve_all_keyword(bot, query)
+  
+  # ============ EXTENSIONS ============
+  elif action.startswith("get_extension_"):
+     await get_extension(bot, query)
+  
+  elif action.startswith("add_extension_"):
+     await add_extension(bot, query)
+  
+  elif action.startswith("rmve_all_extension_"):
+     await rmve_all_extension(bot, query)
+  
+  # ============ LINK REMOVAL ============
+  elif action.startswith("toggle_link_remove_"):
+     await toggle_link_remove(bot, query)
+  
+  elif action.startswith("set_replace_link_"):
+     await set_replace_link(bot, query)
+  
   # ============ TURBO MODE ============
   elif action.startswith("turbo_menu_"):
      bot_id = int(action.split('_')[2])
@@ -526,6 +566,7 @@ async def settings_query(bot, query):
          ])
      )
 
+
 # ============ HELPER FUNCTIONS ============
 
 async def extra_buttons(user_id, bot_id):
@@ -547,12 +588,12 @@ async def extra_buttons(user_id, bot_id):
                     callback_data=f'settings#get_extension_{bot_id}')
         ],[
         InlineKeyboardButton('🔗 Link Removal',
-                    callback_data=f'settings#link_remove_{bot_id}'),
+                    callback_data=f'settings#toggle_link_remove_{bot_id}'),
         InlineKeyboardButton('✅' if link_remove else '❌',
                     callback_data=f'settings#toggle_link_remove_{bot_id}')
         ],[
         InlineKeyboardButton('🔄 Replacement Link',
-                    callback_data=f'settings#replace_link_{bot_id}'),
+                    callback_data=f'settings#set_replace_link_{bot_id}'),
         InlineKeyboardButton(replace_text,
                     callback_data=f'settings#set_replace_link_{bot_id}')
         ],[
@@ -561,6 +602,7 @@ async def extra_buttons(user_id, bot_id):
         InlineKeyboardButton('⫷ Bᴀᴄᴋ', callback_data=f"settings#extra_main")
         ]]
     return InlineKeyboardMarkup(buttons)
+
 
 async def filters_buttons(user_id, bot_id):
     configs = await db.get_bot_configs(user_id, bot_id)
@@ -604,6 +646,7 @@ async def filters_buttons(user_id, bot_id):
                     callback_data=f"settings#nextfilters_{bot_id}")
         ]]
     return InlineKeyboardMarkup(buttons)
+
 
 async def next_filters_buttons(user_id, bot_id):
     configs = await db.get_bot_configs(user_id, bot_id)
@@ -649,9 +692,9 @@ async def next_filters_buttons(user_id, bot_id):
         ]]
     return InlineKeyboardMarkup(buttons)
 
+
 # ============ SIZE LIMIT HANDLERS ============
 
-@Client.on_callback_query(filters.regex(r'^settings#file_size_'))
 async def size_settings(bot, query):
     bot_id = int(query.data.split('_')[2])
     configs = await db.get_bot_configs(query.from_user.id, bot_id)
@@ -660,7 +703,7 @@ async def size_settings(bot, query):
        f'<b><u>SIZE LIMIT</b></u><b>\n\nyou can set file Minimum size limit to forward\n\nfiles with greater than `{size} MB` will forward</b>',
        reply_markup=size_button(bot_id, size, 'min'))
 
-@Client.on_callback_query(filters.regex(r'^settings#maxfile_size_'))
+
 async def maxsize_settings(bot, query):
     bot_id = int(query.data.split('_')[2])
     configs = await db.get_bot_configs(query.from_user.id, bot_id)
@@ -668,6 +711,7 @@ async def maxsize_settings(bot, query):
     await query.message.edit_text(
        f'<b><u>Max SIZE LIMIT</b></u><b>\n\nyou can set file Maximum size limit to forward\n\nfiles with less than `{size} MB` will forward</b>',
        reply_markup=size_button(bot_id, size, 'max'))
+
 
 def size_button(bot_id, size, type):
     update_type = 'update_size' if type == 'min' else 'maxupdate_size'
@@ -691,7 +735,7 @@ def size_button(bot_id, size, type):
         ]]
     return InlineKeyboardMarkup(buttons)
 
-@Client.on_callback_query(filters.regex(r'^settings#update_size_'))
+
 async def update_size(bot, query):
     parts = query.data.split('_')
     bot_id = int(parts[1])
@@ -702,7 +746,7 @@ async def update_size(bot, query):
     query.data = f"settings#file_size_{bot_id}"
     await size_settings(bot, query)
 
-@Client.on_callback_query(filters.regex(r'^settings#maxupdate_size_'))
+
 async def update_maxsize(bot, query):
     parts = query.data.split('_')
     bot_id = int(parts[1])
@@ -713,9 +757,9 @@ async def update_maxsize(bot, query):
     query.data = f"settings#maxfile_size_{bot_id}"
     await maxsize_settings(bot, query)
 
+
 # ============ KEYWORDS ============
 
-@Client.on_callback_query(filters.regex(r'^settings#get_keyword_'))
 async def get_keyword(bot, query):
     bot_id = int(query.data.split('_')[2])
     configs = await db.get_bot_configs(query.from_user.id, bot_id)
@@ -733,7 +777,7 @@ async def get_keyword(bot, query):
     ]
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
-@Client.on_callback_query(filters.regex(r'^settings#add_keyword_'))
+
 async def add_keyword(bot, query):
     bot_id = int(query.data.split('_')[2])
     await query.message.delete()
@@ -759,7 +803,7 @@ async def add_keyword(bot, query):
     await update_configs(query.from_user.id, bot_id, 'keywords', final)
     await ask.reply(f"✅ Added {len(keywords)} keywords!")
 
-@Client.on_callback_query(filters.regex(r'^settings#rmve_all_keyword_'))
+
 async def rmve_all_keyword(bot, query):
     bot_id = int(query.data.split('_')[2])
     await update_configs(query.from_user.id, bot_id, 'keywords', None)
@@ -767,9 +811,9 @@ async def rmve_all_keyword(bot, query):
     query.data = f"settings#get_keyword_{bot_id}"
     await get_keyword(bot, query)
 
+
 # ============ EXTENSIONS ============
 
-@Client.on_callback_query(filters.regex(r'^settings#get_extension_'))
 async def get_extension(bot, query):
     bot_id = int(query.data.split('_')[2])
     configs = await db.get_bot_configs(query.from_user.id, bot_id)
@@ -787,7 +831,7 @@ async def get_extension(bot, query):
     ]
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
-@Client.on_callback_query(filters.regex(r'^settings#add_extension_'))
+
 async def add_extension(bot, query):
     bot_id = int(query.data.split('_')[2])
     await query.message.delete()
@@ -806,7 +850,7 @@ async def add_extension(bot, query):
     await update_configs(query.from_user.id, bot_id, 'extension', final)
     await ext.reply(f"✅ Added {len(extensions)} extensions!")
 
-@Client.on_callback_query(filters.regex(r'^settings#rmve_all_extension_'))
+
 async def rmve_all_extension(bot, query):
     bot_id = int(query.data.split('_')[2])
     await update_configs(query.from_user.id, bot_id, 'extension', None)
@@ -814,9 +858,9 @@ async def rmve_all_extension(bot, query):
     query.data = f"settings#get_extension_{bot_id}"
     await get_extension(bot, query)
 
+
 # ============ LINK REMOVAL ============
 
-@Client.on_callback_query(filters.regex(r'^settings#toggle_link_remove_'))
 async def toggle_link_remove(bot, query):
     bot_id = int(query.data.split('_')[3])
     configs = await db.get_bot_configs(query.from_user.id, bot_id)
@@ -826,7 +870,7 @@ async def toggle_link_remove(bot, query):
     query.data = f"settings#extra_{bot_id}"
     await settings_query(bot, query)
 
-@Client.on_callback_query(filters.regex(r'^settings#set_replace_link_'))
+
 async def set_replace_link(bot, query):
     bot_id = int(query.data.split('_')[3])
     await query.message.delete()
