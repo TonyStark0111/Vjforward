@@ -1,14 +1,13 @@
 import os
 from config import Config
 
-class Script(object):
+class  Script(object):
   START_TXT = """<b>ʜɪ {}
   
 ɪ'ᴍ ᴀ ᴀᴅᴠᴀɴᴄᴇᴅ ꜰᴏʀᴡᴀʀᴅ ʙᴏᴛ
 ɪ ᴄᴀɴ ꜰᴏʀᴡᴀʀᴅ ᴀʟʟ ᴍᴇssᴀɢᴇ ꜰʀᴏᴍ ᴏɴᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴀɴᴏᴛʜᴇʀ ᴄʜᴀɴɴᴇʟ</b>
 
 **ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ ᴛᴏ ᴋɴᴏᴡ ᴍᴏʀᴇ ᴀʙᴏᴜᴛ ᴍᴇ**"""
-  
   HELP_TXT = """<b><u>🔆 Help</b></u>
 
 <u>**📚 Available commands:**</u>
@@ -25,12 +24,7 @@ class Script(object):
 ► __custom button__
 ► __skip duplicate messages__
 ► __filter type of messages__</b>
-
-<b><u>📌 Starting Point Options:</b></u>
-<b>► __Send 0 - Start from the very first message__
-► __Send a message ID - Start from that exact message__
-► __Send a message link - Start from that message__
-► __Forward a message - Start from that message__</b>"""
+"""
   
   HOW_USE_TXT = """<b><u>⚠️ Before Forwarding:</b></u>
 <b>► __add a bot or userbot__
@@ -44,7 +38,7 @@ class Script(object):
   ABOUT_TXT = """<b>
 ╔════❰ ғᴏʀᴡᴀʀᴅ ʙᴏᴛ ❱═❍⊱❁۪۪
 ║╭━━━━━━━━━━━━━━━➣
-║┣⪼📃ʙᴏᴛ : [Fᴏʀᴡᴀʀᴅ Bᴏᴛ](https://t.me/VJForwardBot)
+║┣⪼📃ʙᴏᴛ : [Fᴏʀᴡᴀᴅ Bᴏᴛ](https://t.me/VJForwardBot)
 ║┣⪼👦Cʀᴇᴀᴛᴏʀ : [Kɪɴɢ VJ 👑](https://t.me/kingvj01)
 ║┣⪼🤖Uᴘᴅᴀᴛᴇ : [VJ Bᴏᴛᴢ](https://t.me/vj_botz)
 ║┣⪼📡Hᴏsᴛᴇᴅ ᴏɴ : Sᴜᴘᴇʀ Fᴀsᴛ
@@ -54,7 +48,6 @@ class Script(object):
 ║╰━━━━━━━━━━━━━━━➣
 ╚══════════════════❍⊱❁۪۪
 </b>"""
-  
   STATUS_TXT = """
 ╔════❰ ʙᴏᴛ sᴛᴀᴛᴜs  ❱═❍⊱❁۪۪
 ║╭━━━━━━━━━━━━━━━➣
@@ -69,40 +62,17 @@ class Script(object):
 ║╰━━━━━━━━━━━━━━━➣
 ╚══════════════════❍⊱❁۪۪
 """
-  
   FROM_MSG = "<b>❪ SET SOURCE CHAT ❫\n\nForward the last message or last message link of source chat.\n/cancel - cancel this process</b>"
   TO_MSG = "<b>❪ CHOOSE TARGET CHAT ❫\n\nChoose your target chat from the given buttons.\n/cancel - Cancel this process</b>"
-  
-  START_POINT_MSG = """<b>❪ SET STARTING POINT ❫</b>
-
-Now specify where to start forwarding. You can:
-• Send <b>0</b> to start from the very first message
-• Send a <b>message ID</b> (number) to start from that exact message
-• Send a <b>message link</b> from the source chat
-• <b>Forward a message</b> from the source chat
-
-The bot will forward from that point up to the last message you set.
-Send /cancel to cancel."""
-  
-  CANCEL = "<b>Process Cancelled Successfully !</b>"
+  SKIP_MSG = "<b>❪ SET MESSAGE SKIPING NUMBER ❫</b>\n\n<b>Skip the message as much as you enter the number and the rest of the message will be forwarded\nDefault Skip Number =</b> <code>0</code>\n<code>eg: You enter 0 = 0 message skiped\n You enter 5 = 5 message skiped</code>\n/cancel <b>- cancel this process</b>"
+  CANCEL = "<b>Process Cancelled Succefully !</b>"
   BOT_DETAILS = "<b><u>📄 BOT DETAILS</b></u>\n\n<b>➣ NAME:</b> <code>{}</code>\n<b>➣ BOT ID:</b> <code>{}</code>\n<b>➣ USERNAME:</b> @{}"
   USER_DETAILS = "<b><u>📄 USERBOT DETAILS</b></u>\n\n<b>➣ NAME:</b> <code>{}</code>\n<b>➣ USER ID:</b> <code>{}</code>\n<b>➣ USERNAME:</b> @{}"  
   
-  DOUBLE_CHECK = """<b><u>DOUBLE CHECKING ⚠️</b></u>
-<code>Before forwarding the messages Click the Yes button only after checking the following</code>
-
-<b>★ YOUR BOT:</b> [{botname}](t.me/{botuname})
-<b>★ FROM CHANNEL:</b> `{from_chat}`
-<b>★ TO CHANNEL:</b> `{to_chat}`
-<b>★ START MSG ID:</b> `{start_id}`
-
-<i>° [{botname}](t.me/{botuname}) must be admin in **TARGET CHAT**</i> (`{to_chat}`)
-<i>° If the **SOURCE CHAT** is private your userbot must be member or your bot must be admin in there also</b></i>
-
-<b>If the above is checked then the yes button can be clicked</b>"""
-  
-  SETTINGS_TXT = """<b>change your settings as your wish</b>"""
-  
+  TO_MSG = "<b>❪ CHOOSE TARGET CHAT ❫\n\nChoose your target chat from the given buttons.\n/cancel - Cancel this process</b>"
+   # (Already exists, no change needed)
+          
+  # script.py
   TEXT = """
 ╔════❰ ғᴏʀᴡᴀʀᴅ sᴛᴀᴛᴜs  ❱═❍⊱❁۪۪
 ║╭━━━━━━━━━━━━━━━➣
@@ -114,7 +84,7 @@ Send /cancel to cancel."""
 ║┃
 ║┣⪼<b>🗑 ᴅᴇʟᴇᴛᴇᴅ Msɢ :</b> <code>{}</code>
 ║┃
-║┣⪼<b>🪆 Sᴛᴀʀᴛ Msɢ ID :</b> <code>{}</code>
+║┣⪼<b>🪆 Sᴋɪᴘᴘᴇᴅ Msɢ :</b> <code>{}</code>
 ║┃
 ║┣⪼<b>🔁 Fɪʟᴛᴇʀᴇᴅ Msɢ :</b> <code>{}</code>
 ║┃
@@ -136,23 +106,17 @@ Send /cancel to cancel."""
 ║╰━━━━━━━━━━━━━━━➣
 ╚════❰ {} ❱══❍⊱❁۪۪
 """
+  DOUBLE_CHECK = """<b><u>DOUBLE CHECKING ⚠️</b></u>
+<code>Before forwarding the messages Click the Yes button only after checking the following</code>
+
+<b>★ YOUR BOT:</b> [{botname}](t.me/{botuname})
+<b>★ FROM CHANNEL:</b> `{from_chat}`
+<b>★ TO CHANNEL:</b> `{to_chat}`
+<b>★ SKIP MESSAGES:</b> `{skip}`
+
+<i>° [{botname}](t.me/{botuname}) must be admin in **TARGET CHAT**</i> (`{to_chat}`)
+<i>° If the **SOURCE CHAT** is private your userbot must be member or your bot must be admin in there also</b></i>
+
+<b>If the above is checked then the yes button can be clicked</b>"""
   
-  PROGRESS = """
-╔════❰ ᴘʀᴏɢʀᴇss sᴛᴀᴛᴜs ❱═❍⊱❁۪۪
-║╭━━━━━━━━━━━━━━━➣
-║┣⪼ <b>📊 Pᴇʀᴄᴇɴᴛᴀɢᴇ:</b> <code>{}%</code>
-║┃
-║┣⪼ <b>📥 Fᴇᴛᴄʜᴇᴅ:</b> <code>{}</code>
-║┃
-║┣⪼ <b>✅ Fᴏʀᴡᴀʀᴅᴇᴅ:</b> <code>{}</code>
-║┃
-║┣⪼ <b>⏳ Rᴇᴍᴀɪɴɪɴɢ:</b> <code>{}</code>
-║┃
-║┣⪼ <b>📊 Sᴛᴀᴛᴜs:</b> <code>{}</code>
-║┃
-║┣⪼ <b>⏱️ Tɪᴍᴇ Lᴇғᴛ:</b> <code>{}</code>
-║┃
-║┣⪼ <b>🕐 Uᴘᴛɪᴍᴇ:</b> <code>{}</code>
-║╰━━━━━━━━━━━━━━━➣
-╚══════════════════❍⊱❁۪۪
-"""
+SETTINGS_TXT = """<b>change your settings as your wish</b>"""
