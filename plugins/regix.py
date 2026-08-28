@@ -1,3 +1,4 @@
+  progress = "■" * filled + "□"
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @KingVJ01
@@ -144,67 +145,28 @@ def modify_caption(message, caption, link_remove, replace_link):
 async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None):
     if sleep_seconds <= 0:
         return
-
     remaining = sleep_seconds
-
     while remaining > 0:
         if temp.CANCEL.get(user, False):
             return
-
         i = sts.get(full=True)
-
         if i.total > 0:
-            percentage = "{:.0f}".format(
-                float(i.fetched) * 100 / float(i.total)
-            )
+            percentage = "{:.0f}".format(float(i.fetched) * 100 / float(i.total))
         else:
             percentage = "0"
-
         status_text = f"sleeping {remaining} s"
-
-        text = TEXT.format(
-            i.fetched,
-            i.total_files,
-            i.duplicate,
-            i.deleted,
-            i.skip,
-            i.filtered,
-            status_text,
-            "0 s",
-            percentage,
-            "ᴘʀᴏɢʀᴇssɪɴɢ"
-        )
-
-        # 15-block progress bar
-        BAR_COUNT = 15
-        filled = math.floor(int(percentage) * BAR_COUNT / 100)
-        empty = BAR_COUNT - filled
-        progress = "■" * filled + "□" * empty
-
-        button = [[
-            InlineKeyboardButton(
-                progress,
-                f'fwrdstatus#sleep#{remaining}#{percentage}#{sts.id}'
-            )
-        ]]
-
-        button.append([
-            InlineKeyboardButton(
-                '• ᴄᴀɴᴄᴇʟ',
-                'terminate_frwd'
-            )
-        ])
-
-        await msg_edit(
-            m,
-            text,
-            InlineKeyboardMarkup(button)
-        )
-
+        text = TEXT.format(i.fetched, i.total_files, i.duplicate, i.deleted,
+                           i.skip, i.filtered, status_text, "0 s", percentage, "ᴘʀᴏɢʀᴇssɪɴɢ")
+        progress = "●{0}{1}".format(
+            ''.join(["●" for _ in range(math.floor(int(percentage) / 4))]),
+            ''.join(["○" for _ in range(24 - math.floor(int(percentage) / 4))]))
+        button = [[InlineKeyboardButton(progress, f'fwrdstatus#sleep#{remaining}#{percentage}#{sts.id}')]]
+        button.append([InlineKeyboardButton('• ᴄᴀɴᴄᴇʟ', 'terminate_frwd')])
+        await msg_edit(m, text, InlineKeyboardMarkup(button))
         await asyncio.sleep(1)
         remaining -= 1
-
     await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, None)
+
 
 # ============ LIVE CONFIG RELOAD FUNCTION ============
 
