@@ -94,7 +94,7 @@ def get_keyword_content(message):
             content_list.append(message.caption)
     elif message.voice:
         if message.caption:
-            content_list.append(message.voice.caption)
+            content_list.append(message.caption)
     elif message.sticker:
         if message.sticker.emoji:
             content_list.append(message.sticker.emoji)
@@ -141,7 +141,7 @@ def modify_caption(message, caption, link_remove, replace_link):
 
 # ============ TURBO SLEEP HELPER ============
 
-async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None, bot_link=None):
+async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None):
     if sleep_seconds <= 0:
         return
     remaining = sleep_seconds
@@ -154,19 +154,8 @@ async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None, bot
         else:
             percentage = "0"
         status_text = f"sleeping {remaining} s"
-        text = TEXT.format(
-            bot=bot_link or "Unknown Bot",
-            fetched=i.fetched,
-            forwarded=i.total_files,
-            duplicate=i.duplicate,
-            deleted=i.deleted,
-            skip=i.skip,
-            filtered=i.filtered,
-            status=status_text,
-            eta="0 s",
-            percentage=percentage,
-            title="ᴘʀᴏɢʀᴇssɪɴɢ"
-        )
+        text = TEXT.format(i.fetched, i.total_files, i.duplicate, i.deleted,
+                           i.skip, i.filtered, status_text, "0 s", percentage, "ᴘʀᴏɢʀᴇssɪɴɢ")
         progress = "●{0}{1}".format(
             ''.join(["●" for _ in range(math.floor(int(percentage) / 4))]),
             ''.join(["○" for _ in range(24 - math.floor(int(percentage) / 4))]))
@@ -175,7 +164,7 @@ async def turbo_sleep_with_status(user, m, sts, sleep_seconds, user_db=None, bot
         await msg_edit(m, text, InlineKeyboardMarkup(button))
         await asyncio.sleep(1)
         remaining -= 1
-    await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, None, bot_link)
+    await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, None)
 
 
 # ============ LIVE CONFIG RELOAD FUNCTION ============
@@ -229,14 +218,6 @@ async def pub_(bot, message):
     if not _bot:
         temp.BOT_BUSY[bot_id] = False
         return await msg_edit(m, "<code>You didn't added any bot. Please add a bot using /settings !</code>", wait=True)
-    
-    # ⭐ GENERATE BOT LINK (CLICKABLE) ⭐
-    bot_name = _bot.get('name', 'Unknown Bot')
-    bot_username = _bot.get('username')
-    if bot_username:
-        bot_link = f"[{bot_name}](https://t.me/{bot_username})"
-    else:
-        bot_link = f"{bot_name} (ID: {_bot.get('bot_id', '?')})"
     
     # ============ NO PRIVATE-CHANNEL PRE-CHECK ============
     # The bot will try to access the channel, and if it fails, it will handle it below
@@ -300,13 +281,6 @@ async def pub_(bot, message):
                     _bot = userbot
                     bot_id = userbot['bot_id']
                     _bot, caption, forward_tag, datas, protect, button = await sts.get_data(user, bot_id)
-                    # ⭐ UPDATE BOT LINK AFTER SWITCH ⭐
-                    bot_name = _bot.get('name', 'Unknown Bot')
-                    bot_username = _bot.get('username')
-                    if bot_username:
-                        bot_link = f"[{bot_name}](https://t.me/{bot_username})"
-                    else:
-                        bot_link = f"{bot_name} (ID: {_bot.get('bot_id', '?')})"
                 except Exception as second_error:
                     await msg_edit(m, f"**Both bot and userbot failed.**\n\n{second_error}", retry_btn(frwd_id), True)
                     return await stop_client(client, user, bot_id)
@@ -364,18 +338,11 @@ async def pub_(bot, message):
     else:
         sleep = 3 if _bot['is_bot'] else 6
     
-    # ⭐ PASS BOT_LINK TO EDIT ⭐
-    await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id, bot_link)
+    await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id)
     
     try:
-        # Get the offset - if skip is 0, start from message 1
-        offset = sts.get("skip")
-        if offset == 0:
-            offset = 1  # Start from first message
-        
-        async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=offset, filters=filter, max_size=max_size):
-            # ⭐ PASS BOT_LINK TO IS_CANCELLED ⭐
-            if await is_cancelled(client, user, m, sts, bot_id, bot_link):
+        async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=sts.get("skip"), filters=filter, max_size=max_size):
+            if await is_cancelled(client, user, m, sts, bot_id):
                 if user_have_db:
                     await user_db.drop_all()
                     await user_db.close()
@@ -401,8 +368,7 @@ async def pub_(bot, message):
                 datas = new_datas
             
             if pling % 20 == 0: 
-                # ⭐ PASS BOT_LINK TO EDIT ⭐
-                await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id, bot_link)
+                await edit(user, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id)
             pling += 1
             sts.add('fetched')
             
@@ -463,8 +429,7 @@ async def pub_(bot, message):
                     if turbo_count > 0:
                         turbo_counter += notcompleted
                         if turbo_counter >= turbo_count:
-                            # ⭐ PASS BOT_LINK TO TURBO SLEEP ⭐
-                            await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None, bot_link)
+                            await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
                             turbo_counter = 0
                     
                     await asyncio.sleep(10)
@@ -478,8 +443,7 @@ async def pub_(bot, message):
                 if turbo_count > 0:
                     turbo_counter += 1
                     if turbo_counter >= turbo_count:
-                        # ⭐ PASS BOT_LINK TO TURBO SLEEP ⭐
-                        await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None, bot_link)
+                        await turbo_sleep_with_status(user, m, sts, turbo_sleep, user_db if user_have_db else None)
                         turbo_counter = 0
                 
                 await asyncio.sleep(sleep) 
@@ -494,8 +458,7 @@ async def pub_(bot, message):
     
     temp.IS_FRWD_CHAT.remove(sts.TO)
     await send(client, user, "<b>🎉 ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
-    # ⭐ PASS BOT_LINK TO EDIT ⭐
-    await edit(user, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts, bot_id, bot_link) 
+    await edit(user, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts, bot_id) 
     if user_have_db:
         await user_db.drop_all()
         await user_db.close()
@@ -551,8 +514,7 @@ async def msg_edit(msg, text, button=None, wait=None):
            await asyncio.sleep(e.value)
            return await msg_edit(msg, text, button, wait)
 
-# ⭐ UPDATED EDIT FUNCTION WITH BOT LINK ⭐
-async def edit(user, msg, title, status, sts, bot_id, bot_link=None):
+async def edit(user, msg, title, status, sts, bot_id):
    i = sts.get(full=True)
    status = 'Forwarding' if status == 5 else f"sleeping {status} s" if str(status).isnumeric() else status
    percentage = "{:.0f}".format(float(i.fetched)*100/float(i.total)) if i.total > 0 else "0"
@@ -566,23 +528,7 @@ async def edit(user, msg, title, status, sts, bot_id, bot_link=None):
    if status in ["cancelled", "completed"]:
        eta = "0 s"
    
-   # ⭐ USE BOT_LINK IN STATUS ⭐
-   bot_display = bot_link or "Unknown Bot"
-   
-   text = TEXT.format(
-       bot=bot_display,
-       fetched=i.fetched,
-       forwarded=i.total_files,
-       duplicate=i.duplicate,
-       deleted=i.deleted,
-       skip=i.skip,
-       filtered=i.filtered,
-       status=status,
-       eta=eta,
-       percentage=percentage,
-       title=title
-   )
-   
+   text = TEXT.format(i.fetched, i.total_files, i.duplicate, i.deleted, i.skip, i.filtered, status, eta, percentage, title)
    await update_forward(user_id=user, last_id=None, start_time=i.start, limit=i.limit, chat_id=i.FROM, toid=i.TO, forward_id=None, msg_id=msg.id, fetched=i.fetched, deleted=i.deleted, total=i.total_files, duplicate=i.duplicate, skip=i.skip, filterd=i.filtered, bot_id=bot_id)
    now = time.time()
    diff = int(now - i.start)
@@ -602,12 +548,11 @@ async def edit(user, msg, title, status, sts, bot_id, bot_link=None):
       button.append([InlineKeyboardButton('• ᴄᴀɴᴄᴇʟ', 'terminate_frwd')])
    await msg_edit(msg, text, InlineKeyboardMarkup(button))
 
-# ⭐ UPDATED IS_CANCELLED WITH BOT_LINK ⭐
-async def is_cancelled(client, user, msg, sts, bot_id, bot_link=None):
+async def is_cancelled(client, user, msg, sts, bot_id):
    if temp.CANCEL.get(user)==True:
       if sts.TO in temp.IS_FRWD_CHAT:
          temp.IS_FRWD_CHAT.remove(sts.TO)
-      await edit(user, msg, 'ᴄᴀɴᴄᴇʟʟᴇᴅ', "cancelled", sts, bot_id, bot_link)
+      await edit(user, msg, 'ᴄᴀɴᴄᴇʟʟᴇᴅ', "cancelled", sts, bot_id)
       await send(client, user, "<b>❌ ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴀɴᴄᴇʟʟᴇᴅ</b>")
       await stop_client(client, user, bot_id)
       return True 
@@ -743,7 +688,7 @@ async def status_msg(bot, msg):
         total = sts.get('limit') - sts.get('fetched')
         time_to_comple = await complete_time(total)
         est_time = est_time if (est_time != '' or status not in ['completed', 'cancelled']) else '0 s'
-        await msg.answer(Script.PROGRESS.format(percentage, fetched, forwarded, remaining, status, time_to_comple, uptime), show_alert=True)
+        await msg.answer(PROGRESS.format(percentage, fetched, forwarded, remaining, status, time_to_comple, uptime), show_alert=True)
     except Exception as e:
         await msg.answer(f"Status: Forwarding in progress", show_alert=True)
 
@@ -789,14 +734,6 @@ async def restart_pending_forwads(bot, user):
     if not _bot:
         await db.rmve_frwd(user_id)
         return
-    
-    # ⭐ GENERATE BOT LINK ⭐
-    bot_name = _bot.get('name', 'Unknown Bot')
-    bot_username = _bot.get('username')
-    if bot_username:
-        bot_link = f"[{bot_name}](https://t.me/{bot_username})"
-    else:
-        bot_link = f"{bot_name} (ID: {_bot.get('bot_id', '?')})"
     
     try:
        skiping = settings['offset']
@@ -948,20 +885,13 @@ async def restart_pending_forwads(bot, user):
     replace_link = datas['replace_link']
     
     try:
-        # ⭐ PASS BOT_LINK TO EDIT ⭐
-        await edit(user_id, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id, bot_link)
+        await edit(user_id, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id)
     except:
         pass
     
     try:
-        # Get the offset - if skip is 0, start from message 1
-        offset = sts.get("skip")
-        if offset == 0:
-            offset = 1  # Start from first message
-        
-        async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=offset, filters=filter, max_size=max_size):
-            # ⭐ PASS BOT_LINK TO IS_CANCELLED ⭐
-            if await is_cancelled(client, user_id, m, sts, bot_id, bot_link):
+        async for message in iter_messages(client, chat_id=sts.get("FROM"), limit=sts.get("limit"), offset=skiping, filters=filter, max_size=max_size):
+            if await is_cancelled(client, user_id, m, sts, bot_id):
                 if user_have_db:
                     await user_db.drop_all()
                     await user_db.close()
@@ -982,8 +912,7 @@ async def restart_pending_forwads(bot, user):
             
             if pling % 20 == 0: 
                 try:
-                    # ⭐ PASS BOT_LINK TO EDIT ⭐
-                    await edit(user_id, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id, bot_link)
+                    await edit(user_id, m, 'ᴘʀᴏɢʀᴇssɪɴɢ', 5, sts, bot_id)
                 except:
                     pass
             pling += 1
@@ -1046,8 +975,7 @@ async def restart_pending_forwads(bot, user):
                     if turbo_count > 0:
                         turbo_counter += notcompleted
                         if turbo_counter >= turbo_count:
-                            # ⭐ PASS BOT_LINK TO TURBO SLEEP ⭐
-                            await turbo_sleep_with_status(user_id, m, sts, turbo_sleep, user_db if user_have_db else None, bot_link)
+                            await turbo_sleep_with_status(user_id, m, sts, turbo_sleep, user_db if user_have_db else None)
                             turbo_counter = 0
                     
                     await asyncio.sleep(10)
@@ -1061,8 +989,7 @@ async def restart_pending_forwads(bot, user):
                 if turbo_count > 0:
                     turbo_counter += 1
                     if turbo_counter >= turbo_count:
-                        # ⭐ PASS BOT_LINK TO TURBO SLEEP ⭐
-                        await turbo_sleep_with_status(user_id, m, sts, turbo_sleep, user_db if user_have_db else None, bot_link)
+                        await turbo_sleep_with_status(user_id, m, sts, turbo_sleep, user_db if user_have_db else None)
                         turbo_counter = 0
                 
                 await asyncio.sleep(sleep) 
@@ -1088,8 +1015,7 @@ async def restart_pending_forwads(bot, user):
         await user_db.drop_all()
         await user_db.close()
     try:
-        # ⭐ PASS BOT_LINK TO EDIT ⭐
-        await edit(user_id, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts, bot_id, bot_link) 
+        await edit(user_id, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts, bot_id) 
     except:
         pass
     await client.stop()
