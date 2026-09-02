@@ -151,14 +151,50 @@ async def run(bot, message):
     except Exception as e:
         return await message.reply_text(f"Error: {str(e)[:100]}")
     
-    # ============ SKIP NUMBER ============
-    skipno = await bot.ask(message.chat.id, Script.SKIP_MSG)
-    if skipno.text.startswith('/'):
+    # ============ START POINT (UNIVERSAL SKIPPING) ============
+    start_resp = await bot.ask(message.chat.id, Script.START_POINT_MSG)
+    if start_resp.text and start_resp.text.startswith('/'):
         await message.reply(Script.CANCEL)
         return
-    
+
+    start_id = None
+
+    # 1) Numeric (including 0)
+    if start_resp.text and start_resp.text.isdigit():
+        start_id = int(start_resp.text)
+        # 0 is valid - means start from beginning
+
+    # 2) Link
+    elif start_resp.text:
+        regex = re.compile(r"(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")
+        match = regex.match(start_resp.text.replace("?single", ""))
+        if match:
+            start_id = int(match.group(5))
+        else:
+            # 3) Forwarded message
+            if start_resp.forward_from_chat:
+                start_id = start_resp.forward_from_message_id
+            else:
+                await message.reply_text(
+                    "❌ Invalid input. Please send 0, a number, a link, or forward a message from the source chat."
+                )
+                return
+
+    if start_id is None:
+        await message.reply_text("❌ Could not determine starting message.")
+        return
+
+    # Validate: start_id cannot be greater than last_msg_id
+    # But 0 is always valid (means start from beginning)
+    if start_id != 0 and start_id > last_msg_id:
+        await message.reply_text(
+            f"❌ Starting message ID `{start_id}` is greater than last message ID `{last_msg_id}`. "
+            "Please choose a lower ID or send 0 to start from the beginning."
+        )
+        return
+
     # ============ CREATE FORWARD SESSION ============
-    forward_id = f"{user_id}-{skipno.id}"
+    forward_id = f"{user_id}-{start_id}"  # using start_id for uniqueness
     buttons = [[
         InlineKeyboardButton('✅ Yes', callback_data=f"start_public_{forward_id}"),
         InlineKeyboardButton('❌ No', callback_data="close_btn")
@@ -167,12 +203,22 @@ async def run(bot, message):
     
     bot_name = selected_bot['name']
     bot_uname = selected_bot['username'] if selected_bot['username'] else "None"
+    
+    # Show appropriate message based on start_id
+    start_display = "0 (start from beginning)" if start_id == 0 else start_id
+    
     await message.reply_text(
-        text=Script.DOUBLE_CHECK.format(botname=bot_name, botuname=bot_uname, from_chat=title, to_chat=to_title, skip=skipno.text),
+        text=Script.DOUBLE_CHECK.format(
+            botname=bot_name,
+            botuname=bot_uname,
+            from_chat=title,
+            to_chat=to_title,
+            start_id=start_display
+        ),
         disable_web_page_preview=True,
         reply_markup=reply_markup
     )
-    STS(forward_id).store(chat_id, toid, int(skipno.text), int(last_msg_id), bot_id)
+    STS(forward_id).store(chat_id, toid, start_id, last_msg_id, bot_id)
 
 # ============ CALLBACK FOR BOT SELECTION ============
 @Client.on_callback_query(filters.regex(r'^select_bot_(\d+)'))
