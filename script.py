@@ -88,7 +88,7 @@ class  Script(object):
 ║┃
 ║┣⪼<b>🔁 Fɪʟᴛᴇʀᴇᴅ Msɢ :</b> <code>{}</code>
 ║┃
-║┣⪼<b>📊 Cᴜʀʀᴇɴᴛ Sᴛᴀᴛᴜs:</b> <code>{}</code>
+║┣⪼<b>📊 Sᴛᴀᴛᴜs:</b> <code>{}</code>
 ║┃
 ║┣⪼<b>⌛ ETA:</b> <code>{}</code>
 ║┃
