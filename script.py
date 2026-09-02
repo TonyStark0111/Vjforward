@@ -69,10 +69,32 @@ class  Script(object):
   BOT_DETAILS = "<b><u>📄 BOT DETAILS</b></u>\n\n<b>➣ NAME:</b> <code>{}</code>\n<b>➣ BOT ID:</b> <code>{}</code>\n<b>➣ USERNAME:</b> @{}"
   USER_DETAILS = "<b><u>📄 USERBOT DETAILS</b></u>\n\n<b>➣ NAME:</b> <code>{}</code>\n<b>➣ USER ID:</b> <code>{}</code>\n<b>➣ USERNAME:</b> @{}"  
   
-  TO_MSG = "<b>❪ CHOOSE TARGET CHAT ❫\n\nChoose your target chat from the given buttons.\n/cancel - Cancel this process</b>"
-   # (Already exists, no change needed)
-          
-  # script.py
+  START_POINT_MSG = """<b>❮ SET STARTING POINT ❯</b>
+
+Now specify where to start forwarding. You can:
+• Send <b>0</b> to start from the very first message
+• Send a <b>message ID</b> (number) to start from that exact message
+• Send a <b>message link</b> from the source chat
+• <b>Forward a message</b> from the source chat
+
+The bot will forward from that point up to the last message you set.
+Send /cancel to cancel."""
+
+
+  DOUBLE_CHECK = """<b><u>DOUBLE CHECKING ⚠️</b></u>
+<code>Before forwarding the messages Click the Yes button only after checking the following</code>
+
+<b>★ YOUR BOT:</b> [{botname}](t.me/{botuname})
+<b>★ FROM CHANNEL:</b> `{from_chat}`
+<b>★ TO CHANNEL:</b> `{to_chat}`
+<b>★ START MSG ID:</b> `{start_id}`
+
+<i>° [{botname}](t.me/{botuname}) must be admin in **TARGET CHAT**</i> (`{to_chat}`)
+<i>° If the **SOURCE CHAT** is private your userbot must be member or your bot must be admin in there also</i>
+
+<b>If the above is checked then the yes button can be clicked</b>"""
+
+  
   TEXT = """
 ╔════❰ ғᴏʀᴡᴀʀᴅ sᴛᴀᴛᴜs  ❱═❍⊱❁۪۪
 ║╭━━━━━━━━━━━━━━━➣
